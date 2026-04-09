@@ -58,7 +58,9 @@ export default function DepartmentsPage() {
         onCreate={openNew}
         onRowClick={openEdit}
         onBulkDelete={async (ids) => { await departmentsApi.bulkDelete(ids); setReloadKey((k) => k + 1); }}
+        onRestore={async (id) => { await departmentsApi.restore(id); setReloadKey((k) => k + 1); }}
         stickyColumnIds={['name']}
+        viewKey="departments"
       />
 
       <Drawer

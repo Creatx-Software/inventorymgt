@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-table';
 import {
   Search, Plus, Trash2, Download, RefreshCw, Settings2, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, Loader2, X,
+  ArrowUp, ArrowDown, Loader2, X, Trash, RotateCcw,
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { ListParams, PaginatedResponse } from '../../types/api';
@@ -23,32 +23,69 @@ export interface DataTableProps<T extends { id: number }> {
   onRowClick?: (row: T) => void;
   onCreate?: () => void;
   onBulkDelete?: (ids: number[]) => Promise<void>;
+  onRestore?: (id: number) => Promise<void>;
   pageSizes?: number[];
   defaultPageSize?: number;
   stickyColumnIds?: string[];
   extraActions?: React.ReactNode;
+  /** Unique key used to persist column visibility + pageSize in localStorage */
+  viewKey?: string;
 }
 
-export function DataTable<T extends { id: number }>({
-  title, subtitle, columns, fetcher, onRowClick, onCreate, onBulkDelete,
+export function DataTable<T extends { id: number; deleted_at?: string | null }>({
+  title, subtitle, columns, fetcher, onRowClick, onCreate, onBulkDelete, onRestore,
   pageSizes = [25, 50, 100, 200, 500],
   defaultPageSize = 100,
   stickyColumnIds = [],
   extraActions,
+  viewKey,
 }: DataTableProps<T>) {
+  const storageKey = viewKey ? `dt:${viewKey}` : null;
+  const loadPersisted = () => {
+    if (!storageKey) return { visibility: {}, pageSize: defaultPageSize };
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return { visibility: {}, pageSize: defaultPageSize };
+      const p = JSON.parse(raw);
+      return { visibility: p.visibility || {}, pageSize: p.pageSize || defaultPageSize };
+    } catch {
+      return { visibility: {}, pageSize: defaultPageSize };
+    }
+  };
+  const persisted = loadPersisted();
+
   const [data, setData] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(defaultPageSize);
+  const [pageSize, setPageSize] = useState<number>(persisted.pageSize);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(persisted.visibility);
   const [showColMenu, setShowColMenu] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  // Add a checkbox column at the start
+  // Persist visibility + pageSize whenever they change
+  useEffect(() => {
+    if (!storageKey) return;
+    localStorage.setItem(storageKey, JSON.stringify({ visibility: columnVisibility, pageSize }));
+  }, [storageKey, columnVisibility, pageSize]);
+
+  // Keyboard shortcut: "/" focuses the search input
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   const allColumns = useMemo<ColumnDef<T, any>[]>(() => [
     {
       id: '__select__',
@@ -99,17 +136,17 @@ export function DataTable<T extends { id: number }>({
         search: search || undefined,
         sortBy: sort?.id,
         sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
+        includeDeleted: showDeleted,
       });
       setData(r.data);
       setTotal(r.pagination.total);
     } finally {
       setLoading(false);
     }
-  }, [fetcher, page, pageSize, search, sorting]);
+  }, [fetcher, page, pageSize, search, sorting, showDeleted]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Debounced search
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput); setPage(1); }, 300);
     return () => clearTimeout(t);
@@ -127,7 +164,14 @@ export function DataTable<T extends { id: number }>({
     load();
   };
 
-  // CSV export of current page
+  const handleRestore = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onRestore) return;
+    if (!confirm('Restore this item?')) return;
+    await onRestore(id);
+    load();
+  };
+
   const exportCsv = () => {
     const visibleCols = table.getVisibleLeafColumns().filter((c) => c.id !== '__select__');
     const header = visibleCols.map((c) => (typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id)).join(',');
@@ -149,7 +193,6 @@ export function DataTable<T extends { id: number }>({
     URL.revokeObjectURL(url);
   };
 
-  // sticky offsets
   const stickyOffsets = useMemo(() => {
     const offsets: Record<string, number> = { __select__: 0 };
     let acc = 40;
@@ -165,7 +208,6 @@ export function DataTable<T extends { id: number }>({
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
@@ -183,7 +225,7 @@ export function DataTable<T extends { id: number }>({
           <div className="relative">
             <button onClick={() => setShowColMenu(!showColMenu)} className="btn-secondary"><Settings2 className="w-4 h-4" /> Columns</button>
             {showColMenu && (
-              <div className="absolute right-0 mt-2 w-56 card py-2 z-30 max-h-80 overflow-y-auto">
+              <div className="absolute right-0 mt-2 w-64 card py-2 z-30 max-h-80 overflow-y-auto">
                 <div className="px-3 py-1 text-xs font-semibold text-slate-400 uppercase">Toggle columns</div>
                 {table.getAllLeafColumns().filter((c) => c.id !== '__select__').map((col) => (
                   <label key={col.id} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 cursor-pointer">
@@ -192,6 +234,13 @@ export function DataTable<T extends { id: number }>({
                     {typeof col.columnDef.header === 'string' ? col.columnDef.header : col.id}
                   </label>
                 ))}
+                <div className="border-t border-slate-100 mt-1 pt-1">
+                  <label className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 cursor-pointer">
+                    <input type="checkbox" checked={showDeleted} onChange={(e) => { setShowDeleted(e.target.checked); setPage(1); }}
+                      className="h-4 w-4 rounded border-slate-300 text-brand-600" />
+                    <span className="text-slate-700">Show deleted items</span>
+                  </label>
+                </div>
               </div>
             )}
           </div>
@@ -201,12 +250,12 @@ export function DataTable<T extends { id: number }>({
         </div>
       </div>
 
-      {/* Search bar */}
       <div className="card p-3">
         <div className="relative max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
-            placeholder="Search..."
+            ref={searchRef}
+            placeholder="Search... (press / to focus)"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="input pl-9 pr-9"
@@ -219,7 +268,13 @@ export function DataTable<T extends { id: number }>({
         </div>
       </div>
 
-      {/* Table */}
+      {showDeleted && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-800 flex items-center gap-2">
+          <Trash className="w-4 h-4" />
+          Showing soft-deleted items. Click the <RotateCcw className="w-3 h-3 inline" /> icon on a row to restore it.
+        </div>
+      )}
+
       <div className="card overflow-hidden">
         <div className="overflow-auto max-h-[calc(100vh-300px)] relative">
           <table className="w-full text-sm border-collapse">
@@ -247,51 +302,70 @@ export function DataTable<T extends { id: number }>({
                       </th>
                     );
                   })}
+                  {showDeleted && onRestore && (
+                    <th className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-600 border-b border-slate-200">Action</th>
+                  )}
                 </tr>
               ))}
             </thead>
             <tbody>
               {loading && data.length === 0 && (
-                <tr><td colSpan={allColumns.length} className="text-center py-12 text-slate-400">
+                <tr><td colSpan={allColumns.length + (showDeleted && onRestore ? 1 : 0)} className="text-center py-12 text-slate-400">
                   <Loader2 className="w-6 h-6 animate-spin inline" />
                 </td></tr>
               )}
               {!loading && data.length === 0 && (
-                <tr><td colSpan={allColumns.length} className="text-center py-12 text-slate-400">No data</td></tr>
+                <tr><td colSpan={allColumns.length + (showDeleted && onRestore ? 1 : 0)} className="text-center py-12 text-slate-400">No data</td></tr>
               )}
-              {table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  onClick={() => onRowClick?.(row.original)}
-                  className={clsx(
-                    'border-b border-slate-100 hover:bg-brand-50/40 transition-colors',
-                    onRowClick && 'cursor-pointer',
-                    row.getIsSelected() && 'bg-brand-50/60',
-                  )}
-                >
-                  {row.getVisibleCells().map((cell) => {
-                    const sticky = isSticky(cell.column.id);
-                    return (
-                      <td
-                        key={cell.id}
-                        className={clsx(
-                          'px-3 py-2 text-slate-700 whitespace-nowrap',
-                          sticky && 'sticky bg-white z-[1]',
-                          row.getIsSelected() && sticky && 'bg-brand-50',
+              {table.getRowModel().rows.map((row) => {
+                const isDeleted = !!(row.original as any).deleted_at;
+                return (
+                  <tr
+                    key={row.id}
+                    onClick={() => !isDeleted && onRowClick?.(row.original)}
+                    className={clsx(
+                      'border-b border-slate-100 hover:bg-brand-50/40 transition-colors',
+                      onRowClick && !isDeleted && 'cursor-pointer',
+                      row.getIsSelected() && 'bg-brand-50/60',
+                      isDeleted && 'opacity-60',
+                    )}
+                  >
+                    {row.getVisibleCells().map((cell) => {
+                      const sticky = isSticky(cell.column.id);
+                      return (
+                        <td
+                          key={cell.id}
+                          className={clsx(
+                            'px-3 py-2 text-slate-700 whitespace-nowrap',
+                            sticky && 'sticky bg-white z-[1]',
+                            row.getIsSelected() && sticky && 'bg-brand-50',
+                            isDeleted && sticky && 'bg-slate-50',
+                          )}
+                          style={sticky ? { left: stickyOffsets[cell.column.id] ?? 0 } : undefined}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      );
+                    })}
+                    {showDeleted && onRestore && (
+                      <td className="px-3 py-2">
+                        {isDeleted && (
+                          <button
+                            onClick={(e) => handleRestore(row.original.id, e)}
+                            className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 py-1 px-2 text-xs"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Restore
+                          </button>
                         )}
-                        style={sticky ? { left: stickyOffsets[cell.column.id] ?? 0 } : undefined}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
-        {/* Footer / pagination */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50/50">
           <div className="flex items-center gap-3 text-sm text-slate-600">
             <span>

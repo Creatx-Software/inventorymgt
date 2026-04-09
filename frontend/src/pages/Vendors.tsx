@@ -71,7 +71,9 @@ export default function VendorsPage() {
         onCreate={openNew}
         onRowClick={openEdit}
         onBulkDelete={async (ids) => { await vendorsApi.bulkDelete(ids); setReloadKey((k) => k + 1); }}
+        onRestore={async (id) => { await vendorsApi.restore(id); setReloadKey((k) => k + 1); }}
         stickyColumnIds={['name']}
+        viewKey="vendors"
       />
 
       <Drawer

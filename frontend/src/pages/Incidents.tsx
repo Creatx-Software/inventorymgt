@@ -151,6 +151,7 @@ export default function IncidentsPage() {
         onRowClick={openEdit}
         onBulkDelete={async (ids) => { await incidentsApi.bulkDelete(ids); setReloadKey((k) => k + 1); }}
         stickyColumnIds={['incident_code']}
+        viewKey="incidents"
       />
 
       <Drawer

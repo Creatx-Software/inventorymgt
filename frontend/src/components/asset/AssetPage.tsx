@@ -16,6 +16,7 @@ export interface AssetCrudApi<T> {
   update: (id: number, data: any) => Promise<T>;
   remove: (id: number) => Promise<void>;
   bulkDelete: (ids: number[]) => Promise<{ deleted: number }>;
+  restore: (id: number) => Promise<void>;
 }
 
 export interface AssetPageProps<T extends AssetCommon, ExtraForm extends Record<string, any>> {
@@ -131,7 +132,9 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
         onCreate={openNew}
         onRowClick={openEdit}
         onBulkDelete={async (ids) => { await api.bulkDelete(ids); setReloadKey((k) => k + 1); }}
+        onRestore={async (id) => { await api.restore(id); setReloadKey((k) => k + 1); }}
         stickyColumnIds={stickyColumnIds}
+        viewKey={`asset-${assetType}`}
         extraActions={
           <button onClick={() => setImportOpen(true)} className="btn-secondary">
             <Upload className="w-4 h-4" /> Import

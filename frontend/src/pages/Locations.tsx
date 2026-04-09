@@ -73,7 +73,9 @@ export default function LocationsPage() {
         onCreate={openNew}
         onRowClick={openEdit}
         onBulkDelete={async (ids) => { await locationsApi.bulkDelete(ids); setReloadKey((k) => k + 1); }}
+        onRestore={async (id) => { await locationsApi.restore(id); setReloadKey((k) => k + 1); }}
         stickyColumnIds={['name']}
+        viewKey="locations"
       />
 
       <Drawer

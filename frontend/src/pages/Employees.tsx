@@ -110,7 +110,9 @@ export default function EmployeesPage() {
         onCreate={openNew}
         onRowClick={openEdit}
         onBulkDelete={async (ids) => { await employeesApi.bulkDelete(ids); setReloadKey((k) => k + 1); }}
+        onRestore={async (id) => { await employeesApi.restore(id); setReloadKey((k) => k + 1); }}
         stickyColumnIds={['full_name']}
+        viewKey="employees"
       />
 
       <Drawer

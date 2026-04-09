@@ -3,7 +3,6 @@ import { AuthProvider } from './contexts/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Placeholder from './pages/Placeholder';
 import Vendors from './pages/Vendors';
 import Locations from './pages/Locations';
 import Departments from './pages/Departments';
@@ -18,6 +17,7 @@ import NetworkDevices from './pages/NetworkDevices';
 import OtherAssets from './pages/OtherAssets';
 import Incidents from './pages/Incidents';
 import AuditLogs from './pages/AuditLogs';
+import Settings from './pages/Settings';
 
 export default function App() {
   return (
@@ -41,7 +41,7 @@ export default function App() {
             <Route path="/departments"     element={<Departments />} />
             <Route path="/locations"       element={<Locations />} />
             <Route path="/vendors"         element={<Vendors />} />
-            <Route path="/settings"        element={<Placeholder title="Settings" />} />
+            <Route path="/settings"        element={<Settings />} />
           </Route>
         </Routes>
       </BrowserRouter>
