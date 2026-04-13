@@ -27,7 +27,7 @@ export interface DataTableProps<T extends { id: number }> {
   pageSizes?: number[];
   defaultPageSize?: number;
   stickyColumnIds?: string[];
-  extraActions?: React.ReactNode;
+  extraActions?: React.ReactNode | ((ctx: { selectedIds: number[] }) => React.ReactNode);
   /** Unique key used to persist column visibility + pageSize in localStorage */
   viewKey?: string;
 }
@@ -219,7 +219,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
               <Trash2 className="w-4 h-4" /> Delete ({selectedIds.length})
             </button>
           )}
-          {extraActions}
+          {typeof extraActions === 'function' ? extraActions({ selectedIds }) : extraActions}
           <button onClick={exportCsv} className="btn-secondary"><Download className="w-4 h-4" /> Export</button>
           <button onClick={load} className="btn-secondary" title="Refresh"><RefreshCw className={clsx('w-4 h-4', loading && 'animate-spin')} /></button>
           <div className="relative">

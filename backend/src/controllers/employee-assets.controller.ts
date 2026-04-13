@@ -44,3 +44,11 @@ employeeAssetsRouter.get('/:id/assets', async (req, res) => {
   const totalCount = result.reduce((s, r) => s + r.count, 0);
   res.json({ totalCount, groups: result.filter((r) => r.count > 0) });
 });
+
+// Bulk mark employees as reviewed
+employeeAssetsRouter.post('/bulk-review', async (req, res) => {
+  const ids: number[] = req.body?.ids || [];
+  if (!ids.length) return res.json({ updated: 0 });
+  const n = await db('employees').whereIn('id', ids).update({ needs_review: false });
+  res.json({ updated: n });
+});

@@ -6,7 +6,7 @@ import { Drawer } from '../components/ui/Drawer';
 import { employeesApi, departmentsApi, locationsApi } from '../api/lookups';
 import { api } from '../api/client';
 import type { Employee, Department, Location } from '../types/api';
-import { AlertCircle, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink } from 'lucide-react';
 
 interface AssetGroup {
   key: string;
@@ -36,7 +36,7 @@ export default function EmployeesPage() {
   const [editing, setEditing] = useState<Employee | null>(null);
   const [tab, setTab] = useState<'details' | 'assets'>('details');
   const [form, setForm] = useState({
-    employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true,
+    employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true, needs_review: false,
   });
   const [departments, setDepartments] = useState<Department[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -63,7 +63,7 @@ export default function EmployeesPage() {
       cell: (i) => (
         <div className="flex items-center gap-2">
           <span className="font-medium text-slate-900">{i.getValue() as string}</span>
-          {i.row.original.needs_review && (
+          {!!i.row.original.needs_review && (
             <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
           )}
         </div>
@@ -86,7 +86,7 @@ export default function EmployeesPage() {
     setEditing(null);
     setTab('details');
     setAssets(null);
-    setForm({ employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true });
+    setForm({ employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true, needs_review: false });
     setOpen(true);
   };
 
@@ -101,6 +101,7 @@ export default function EmployeesPage() {
       department_id: row.department_id ? String(row.department_id) : '',
       location_id: row.location_id ? String(row.location_id) : '',
       is_active: row.is_active,
+      needs_review: row.needs_review,
     });
     setOpen(true);
   };
@@ -128,6 +129,7 @@ export default function EmployeesPage() {
         department_id: form.department_id ? Number(form.department_id) : null,
         location_id: form.location_id ? Number(form.location_id) : null,
         is_active: form.is_active,
+        needs_review: form.needs_review,
       };
       if (editing) await employeesApi.update(editing.id, payload as any);
       else await employeesApi.create(payload as any);
@@ -145,6 +147,11 @@ export default function EmployeesPage() {
     setReloadKey((k) => k + 1);
   };
 
+  const bulkMarkReviewed = async (ids: number[]) => {
+    await api.post('/employees/bulk-review', { ids });
+    setReloadKey((k) => k + 1);
+  };
+
   return (
     <>
       <DataTable<Employee>
@@ -158,6 +165,9 @@ export default function EmployeesPage() {
         onRestore={async (id) => { await employeesApi.restore(id); setReloadKey((k) => k + 1); }}
         stickyColumnIds={['full_name']}
         viewKey="employees"
+        extraActions={({ selectedIds }) => (
+          <BulkReviewButton selectedIds={selectedIds} onBulkReview={bulkMarkReviewed} />
+        )}
       />
 
       <Drawer
@@ -233,12 +243,29 @@ export default function EmployeesPage() {
                 {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-brand-600" checked={form.is_active}
                   onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
                 Active
               </label>
+            </div>
+            <div className="col-span-1">
+              {!!form.needs_review && (
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, needs_review: false })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition"
+                >
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Needs review — click to clear
+                </button>
+              )}
+              {editing && !form.needs_review && !!editing.needs_review && (
+                <span className="flex items-center gap-1.5 text-sm text-emerald-600">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Will be marked as reviewed on save
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -301,5 +328,26 @@ export default function EmployeesPage() {
         )}
       </Drawer>
     </>
+  );
+}
+
+function BulkReviewButton({ selectedIds, onBulkReview }: { selectedIds: number[]; onBulkReview: (ids: number[]) => Promise<void> }) {
+  const [loading, setLoading] = useState(false);
+
+  if (selectedIds.length === 0) return null;
+
+  const handleClick = async () => {
+    if (!confirm(`Mark ${selectedIds.length} selected employee(s) as reviewed?`)) return;
+    setLoading(true);
+    try {
+      await onBulkReview(selectedIds);
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <button onClick={handleClick} disabled={loading} className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
+      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+      Mark reviewed ({selectedIds.length})
+    </button>
   );
 }
