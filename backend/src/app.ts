@@ -13,6 +13,7 @@ import { importRouter } from './controllers/import.controller';
 import { incidentsRouter } from './controllers/incidents.controller';
 import { auditRouter } from './controllers/audit.controller';
 import { dashboardRouter } from './controllers/dashboard.controller';
+import { employeeAssetsRouter } from './controllers/employee-assets.controller';
 import { notFound, errorHandler } from './middleware/error';
 
 const app = express();
@@ -42,6 +43,7 @@ app.use(`${env.apiPrefix}/import`, importRouter);
 app.use(`${env.apiPrefix}/incidents`, incidentsRouter);
 app.use(`${env.apiPrefix}/audit-logs`, auditRouter);
 app.use(`${env.apiPrefix}/dashboard`, dashboardRouter);
+app.use(`${env.apiPrefix}/employees`, employeeAssetsRouter);
 
 app.use(notFound);
 app.use(errorHandler);

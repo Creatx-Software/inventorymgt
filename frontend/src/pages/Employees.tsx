@@ -1,14 +1,40 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/table/DataTable';
 import { Drawer } from '../components/ui/Drawer';
 import { employeesApi, departmentsApi, locationsApi } from '../api/lookups';
+import { api } from '../api/client';
 import type { Employee, Department, Location } from '../types/api';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink } from 'lucide-react';
+
+interface AssetGroup {
+  key: string;
+  label: string;
+  count: number;
+  assets: { id: number; serial_number: string; asset_name: string | null; model: string | null; status_name: string; status_color: string }[];
+}
+
+interface EmployeeAssets {
+  totalCount: number;
+  groups: AssetGroup[];
+}
+
+const typeIcons: Record<string, any> = {
+  endpoint: Laptop, monitor: Monitor, mobile_device: Smartphone, ip_phone: Phone,
+  server: Server, printer: Printer, network_device: Network, other_asset: Package,
+};
+
+const typeRoutes: Record<string, string> = {
+  endpoint: '/endpoints', monitor: '/monitors', mobile_device: '/mobile-devices', ip_phone: '/ip-phones',
+  server: '/servers', printer: '/printers', network_device: '/network-devices', other_asset: '/other-assets',
+};
 
 export default function EmployeesPage() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
+  const [tab, setTab] = useState<'details' | 'assets'>('details');
   const [form, setForm] = useState({
     employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true,
   });
@@ -16,6 +42,8 @@ export default function EmployeesPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [assets, setAssets] = useState<EmployeeAssets | null>(null);
+  const [assetsLoading, setAssetsLoading] = useState(false);
 
   const fetcher = useCallback((p: any) => employeesApi.list(p), [reloadKey]);
 
@@ -56,12 +84,16 @@ export default function EmployeesPage() {
 
   const openNew = () => {
     setEditing(null);
+    setTab('details');
+    setAssets(null);
     setForm({ employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true });
     setOpen(true);
   };
 
   const openEdit = (row: Employee) => {
     setEditing(row);
+    setTab('details');
+    setAssets(null);
     setForm({
       employee_code: row.employee_code || '',
       full_name: row.full_name,
@@ -72,6 +104,19 @@ export default function EmployeesPage() {
     });
     setOpen(true);
   };
+
+  const loadAssets = async () => {
+    if (!editing) return;
+    setAssetsLoading(true);
+    try {
+      const r = await api.get(`/employees/${editing.id}/assets`);
+      setAssets(r.data);
+    } finally { setAssetsLoading(false); }
+  };
+
+  useEffect(() => {
+    if (tab === 'assets' && editing) loadAssets();
+  }, [tab, editing]);
 
   const save = async () => {
     setSaving(true);
@@ -119,7 +164,7 @@ export default function EmployeesPage() {
         open={open}
         onClose={() => setOpen(false)}
         title={editing ? 'Edit Employee' : 'New Employee'}
-        subtitle={editing ? `ID #${editing.id}` : 'Add a new employee'}
+        subtitle={editing ? `${editing.employee_code || 'No code'} · ID #${editing.id}` : 'Add a new employee'}
         width="lg"
         footer={
           <div className="flex justify-between">
@@ -131,41 +176,129 @@ export default function EmployeesPage() {
           </div>
         }
       >
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-1">
-            <label className="label">Employee Code</label>
-            <input className="input" value={form.employee_code} onChange={(e) => setForm({ ...form, employee_code: e.target.value })} />
+        {/* Tabs */}
+        {editing && (
+          <div className="flex gap-1 mb-5 border-b border-slate-200 -mx-6 px-6">
+            <button
+              onClick={() => setTab('details')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+                tab === 'details' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Details
+            </button>
+            <button
+              onClick={() => setTab('assets')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition flex items-center gap-1.5 ${
+                tab === 'assets' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" />
+              Assigned Assets
+              {assets && (
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-brand-100 text-brand-700">
+                  {assets.totalCount}
+                </span>
+              )}
+            </button>
           </div>
-          <div className="col-span-1">
-            <label className="label">Full Name *</label>
-            <input className="input" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} autoFocus />
+        )}
+
+        {/* Details tab */}
+        {tab === 'details' && (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-1">
+              <label className="label">Employee Code</label>
+              <input className="input" value={form.employee_code} onChange={(e) => setForm({ ...form, employee_code: e.target.value })} />
+            </div>
+            <div className="col-span-1">
+              <label className="label">Full Name *</label>
+              <input className="input" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} autoFocus />
+            </div>
+            <div className="col-span-2">
+              <label className="label">Email</label>
+              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div className="col-span-1">
+              <label className="label">Department</label>
+              <select className="input" value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>
+                <option value="">— None —</option>
+                {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+            <div className="col-span-1">
+              <label className="label">Location</label>
+              <select className="input" value={form.location_id} onChange={(e) => setForm({ ...form, location_id: e.target.value })}>
+                <option value="">— None —</option>
+                {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-brand-600" checked={form.is_active}
+                  onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
+                Active
+              </label>
+            </div>
           </div>
-          <div className="col-span-2">
-            <label className="label">Email</label>
-            <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        )}
+
+        {/* Assigned Assets tab */}
+        {tab === 'assets' && (
+          <div>
+            {assetsLoading && (
+              <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-brand-600" /></div>
+            )}
+            {!assetsLoading && assets && assets.totalCount === 0 && (
+              <div className="text-center text-sm text-slate-400 py-12">
+                No assets assigned to this employee.
+              </div>
+            )}
+            {!assetsLoading && assets && assets.groups.map((group) => {
+              const Icon = typeIcons[group.key] || Package;
+              const route = typeRoutes[group.key] || '/';
+              return (
+                <div key={group.key} className="mb-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon className="w-4 h-4 text-slate-500" />
+                    <span className="text-sm font-semibold text-slate-900">{group.label}</span>
+                    <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-slate-100 text-slate-600">{group.count}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {group.assets.map((asset) => (
+                      <button
+                        key={asset.id}
+                        onClick={() => { setOpen(false); navigate(route); }}
+                        className="w-full text-left card p-3 hover:shadow-md hover:-translate-y-0.5 transition-all group flex items-center gap-3"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-slate-900 truncate">
+                            {asset.asset_name || asset.serial_number}
+                          </div>
+                          <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                            <span className="font-mono">{asset.serial_number}</span>
+                            {asset.model && <span>· {asset.model}</span>}
+                          </div>
+                        </div>
+                        <span
+                          className="inline-block px-2 py-0.5 text-[11px] font-medium rounded-full border shrink-0"
+                          style={{
+                            backgroundColor: (asset.status_color || '#64748b') + '15',
+                            borderColor: (asset.status_color || '#64748b') + '40',
+                            color: asset.status_color || '#475569',
+                          }}
+                        >
+                          {asset.status_name}
+                        </span>
+                        <ExternalLink className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-500 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="col-span-1">
-            <label className="label">Department</label>
-            <select className="input" value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>
-              <option value="">— None —</option>
-              {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
-          <div className="col-span-1">
-            <label className="label">Location</label>
-            <select className="input" value={form.location_id} onChange={(e) => setForm({ ...form, location_id: e.target.value })}>
-              <option value="">— None —</option>
-              {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-          </div>
-          <div className="col-span-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-brand-600" checked={form.is_active}
-                onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
-              Active
-            </label>
-          </div>
-        </div>
+        )}
       </Drawer>
     </>
   );
