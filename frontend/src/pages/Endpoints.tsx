@@ -1,6 +1,6 @@
 import { AssetPage } from '../components/asset/AssetPage';
 import { commonAssetColumns } from '../components/asset/columns';
-import { fmtDate } from '../components/asset/CommonFields';
+import { fmtDate, StatusBadge } from '../components/asset/CommonFields';
 import { endpointsApi } from '../api/assets';
 import type { Endpoint } from '../types/assets';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -24,15 +24,17 @@ const empty: Extra = {
 };
 
 const columns: ColumnDef<Endpoint, any>[] = [
+  { accessorKey: 'host_name', header: 'Host', size: 160, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
   ...commonAssetColumns<Endpoint>().slice(0, 2),
   { accessorKey: 'endpoint_type', header: 'Type', size: 100 },
   ...commonAssetColumns<Endpoint>().slice(2, 4),
-  { accessorKey: 'host_name', header: 'Host', size: 160, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
   { accessorKey: 'asset_code', header: 'Asset Code', size: 160, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
   { accessorKey: 'mac_address', header: 'MAC', size: 150, cell: (i) => <span className="font-mono text-xs">{i.getValue() as string || '—'}</span> },
   { accessorKey: 'ip_address', header: 'IP', size: 130, cell: (i) => <span className="font-mono text-xs">{i.getValue() as string || '—'}</span> },
   { accessorKey: 'os_name_version', header: 'OS', size: 200, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
-  ...commonAssetColumns<Endpoint>().slice(4),
+  { accessorKey: 'status_name', header: 'Status', size: 120, enableSorting: true,
+    cell: (i) => <StatusBadge name={i.row.original.status_name} color={i.row.original.status_color} /> },
+  ...commonAssetColumns<Endpoint>().slice(5),
   { accessorKey: 'warranty_expiry_date', header: 'Warranty Expiry', size: 130, cell: (i) => fmtDate(i.getValue() as string) },
   { accessorKey: 'eol_date', header: 'EOL', size: 110, cell: (i) => fmtDate(i.getValue() as string) },
 ];
@@ -46,7 +48,7 @@ export default function EndpointsPage() {
       assetType="endpoint"
       api={endpointsApi}
       columns={columns}
-      stickyColumnIds={['serial_number']}
+      stickyColumnIds={['host_name']}
       emptyExtra={empty}
       extraToPayload={(e) => ({
         endpoint_type: e.endpoint_type,
@@ -75,7 +77,7 @@ export default function EndpointsPage() {
           <div>
             <label className="label">Type</label>
             <select className="input" value={extra.endpoint_type} onChange={(e) => set({ ...extra, endpoint_type: e.target.value as any })}>
-              <option>Laptop</option><option>Desktop</option><option>Scanner</option><option>Other</option>
+              <option>Laptop</option><option>Desktop</option><option>Other</option>
             </select>
           </div>
           <div>

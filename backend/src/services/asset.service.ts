@@ -82,9 +82,16 @@ export class AssetService {
       return q;
     };
 
+    const JOIN_SORT_MAP: Record<string, string> = {
+      status_name: 'asset_statuses.name',
+      vendor_name: 'vendors.name',
+      location_name: 'locations.name',
+      department_name: 'departments.name',
+      employee_name: 'employees.full_name',
+    };
     const sortBy =
       params.sortBy && this.opts.allowedSortColumns.includes(params.sortBy)
-        ? `${T}.${params.sortBy}`
+        ? (JOIN_SORT_MAP[params.sortBy] ?? `${T}.${params.sortBy}`)
         : `${T}.${this.opts.defaultSort?.column || 'id'}`;
     const sortDir = params.sortDir === 'asc' ? 'asc' : 'desc';
 

@@ -57,7 +57,7 @@ export default function EmployeesPage() {
 
   const columns: ColumnDef<Employee, any>[] = [
     { accessorKey: 'id', header: 'ID', size: 70 },
-    { accessorKey: 'employee_code', header: 'Code', size: 140, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
+    { accessorKey: 'employee_code', header: 'Employee ID', size: 140, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     {
       accessorKey: 'full_name', header: 'Full Name', size: 240,
       cell: (i) => (
@@ -174,7 +174,7 @@ export default function EmployeesPage() {
         open={open}
         onClose={() => setOpen(false)}
         title={editing ? 'Edit Employee' : 'New Employee'}
-        subtitle={editing ? `${editing.employee_code || 'No code'} · ID #${editing.id}` : 'Add a new employee'}
+        subtitle={editing ? `${editing.employee_code || 'No ID'} · ID #${editing.id}` : 'Add a new employee'}
         width="lg"
         footer={
           <div className="flex justify-between">
@@ -218,7 +218,7 @@ export default function EmployeesPage() {
         {tab === 'details' && (
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-1">
-              <label className="label">Employee Code</label>
+              <label className="label">Employee ID</label>
               <input className="input" value={form.employee_code} onChange={(e) => setForm({ ...form, employee_code: e.target.value })} />
             </div>
             <div className="col-span-1">

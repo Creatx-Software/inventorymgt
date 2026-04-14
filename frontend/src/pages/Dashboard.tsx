@@ -205,7 +205,7 @@ export default function Dashboard() {
           ) : <EmptyChart />}
         </ChartCard>
 
-        <ChartCard title="Top Locations" subtitle="Assets per office / data centre">
+        <ChartCard title="Locations" subtitle="Assets per office / data centre">
           {charts && charts.byLocation.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={charts.byLocation} layout="vertical" margin={{ left: 10, right: 20 }}>
@@ -219,7 +219,7 @@ export default function Dashboard() {
           ) : <EmptyChart />}
         </ChartCard>
 
-        <ChartCard title="Top Vendors" subtitle="Most used manufacturers">
+        <ChartCard title="Vendors" subtitle="Most used manufacturers">
           {charts && charts.byVendor.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={charts.byVendor} margin={{ left: 0, right: 20 }}>
@@ -233,7 +233,7 @@ export default function Dashboard() {
           ) : <EmptyChart />}
         </ChartCard>
 
-        <ChartCard title="Top Departments" subtitle="Assets owned by department">
+        <ChartCard title="Departments" subtitle="Assets owned by department">
           {charts && charts.byDepartment.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={charts.byDepartment} layout="vertical" margin={{ left: 10, right: 20 }}>

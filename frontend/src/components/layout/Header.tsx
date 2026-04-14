@@ -24,6 +24,7 @@ export default function Header() {
 
   return (
     <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center px-6 z-20">
+      <img src="/IBN_BIG.svg" alt="IBN" className="h-8 w-auto" />
       <div className="flex items-center gap-3 ml-auto">
         <button className="btn-ghost p-2 relative">
           <Bell className="w-5 h-5" />
