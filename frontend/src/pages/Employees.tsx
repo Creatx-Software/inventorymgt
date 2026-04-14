@@ -174,7 +174,7 @@ export default function EmployeesPage() {
         open={open}
         onClose={() => setOpen(false)}
         title={editing ? 'Edit Employee' : 'New Employee'}
-        subtitle={editing ? `${editing.employee_code || 'No ID'} · ID #${editing.id}` : 'Add a new employee'}
+        subtitle={editing ? (editing.employee_code || 'No ID') : 'Add a new employee'}
         width="lg"
         footer={
           <div className="flex justify-between">

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Boxes, Lock, User2, Loader2 } from 'lucide-react';
+import { Lock, User2, Loader2 } from 'lucide-react';
 
 export default function Login() {
   const { user, login } = useAuth();
@@ -35,9 +35,7 @@ export default function Login() {
       <div className="relative w-full max-w-md">
         <div className="card p-8">
           <div className="flex flex-col items-center mb-8">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-brand-500/30 mb-4">
-              <Boxes className="w-7 h-7 text-white" />
-            </div>
+            <img src="/IBN_BIG.svg" alt="IBN" className="h-16 w-auto mb-4" />
             <h1 className="text-2xl font-bold text-slate-900">Inventory Management</h1>
             <p className="text-sm text-slate-500 mt-1">Sign in to access your assets</p>
           </div>
@@ -88,6 +86,17 @@ export default function Login() {
 
         <p className="text-center text-xs text-slate-500 mt-6">
           UK & Germany Asset Inventory · v1.0
+        </p>
+        <p className="text-center text-xs text-slate-400 mt-2">
+          Design & Developed by:{' '}
+          <a
+            href="https://creatxsoftware.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-slate-600 underline-offset-2"
+          >
+            creatxsoftware.com
+          </a>
         </p>
       </div>
     </div>
