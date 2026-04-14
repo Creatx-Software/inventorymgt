@@ -1,12 +1,15 @@
 import { Router, Response } from 'express';
 import { AssetService, AssetCrudOptions } from '../services/asset.service';
 import { audit } from '../services/audit.service';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth';
 
 export function buildAssetRouter(opts: AssetCrudOptions) {
   const svc = new AssetService(opts);
   const router = Router();
   router.use(authMiddleware);
+
+  // Derive permission prefix: 'endpoint' → 'endpoints', 'mobile_device' → 'mobile_devices'
+  const perm = `${opts.assetType}s`;
 
   router.get('/', async (req: AuthRequest, res: Response) => {
     const { page, pageSize, search, sortBy, sortDir, includeDeleted, ...rest } = req.query as any;
@@ -37,7 +40,7 @@ export function buildAssetRouter(opts: AssetCrudOptions) {
     res.json(rows);
   });
 
-  router.post('/', async (req: AuthRequest, res) => {
+  router.post('/', requirePermission(`${perm}_create`), async (req: AuthRequest, res) => {
     try {
       const id = await svc.create(req.body, req.user!.id);
       const row = await svc.get(id);
@@ -48,7 +51,7 @@ export function buildAssetRouter(opts: AssetCrudOptions) {
     }
   });
 
-  router.put('/:id', async (req: AuthRequest, res) => {
+  router.put('/:id', requirePermission(`${perm}_edit`), async (req: AuthRequest, res) => {
     try {
       const id = Number(req.params.id);
       await svc.update(id, req.body, req.user!.id);
@@ -60,21 +63,21 @@ export function buildAssetRouter(opts: AssetCrudOptions) {
     }
   });
 
-  router.delete('/:id', async (req: AuthRequest, res) => {
+  router.delete('/:id', requirePermission(`${perm}_delete`), async (req: AuthRequest, res) => {
     const id = Number(req.params.id);
     await svc.softDelete(id);
     await audit({ userId: req.user!.id, action: 'DELETE', entityType: opts.assetType, entityId: id, ipAddress: req.ip });
     res.json({ success: true });
   });
 
-  router.post('/:id/restore', async (req: AuthRequest, res) => {
+  router.post('/:id/restore', requirePermission(`${perm}_edit`), async (req: AuthRequest, res) => {
     const id = Number(req.params.id);
     await svc.restore(id);
     await audit({ userId: req.user!.id, action: 'RESTORE', entityType: opts.assetType, entityId: id, ipAddress: req.ip });
     res.json({ success: true });
   });
 
-  router.post('/bulk-delete', async (req: AuthRequest, res) => {
+  router.post('/bulk-delete', requirePermission(`${perm}_delete`), async (req: AuthRequest, res) => {
     const ids: number[] = req.body?.ids || [];
     const n = await svc.bulkDelete(ids);
     await audit({ userId: req.user!.id, action: 'DELETE', entityType: opts.assetType, changes: { ids }, ipAddress: req.ip });

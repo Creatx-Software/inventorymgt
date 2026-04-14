@@ -3,49 +3,66 @@ import {
   LayoutDashboard, Laptop, Monitor, Smartphone, Phone, Server,
   Printer, Network, Package, AlertTriangle, Users, Building2,
   MapPin, Tag, ScrollText, Settings, Boxes, ChevronsLeft, ChevronsRight,
+  UserCog, ShieldCheck,
 } from 'lucide-react';
 import clsx from 'clsx';
+import { useAuth } from '../../contexts/AuthContext';
 
-const sections = [
+interface NavItem {
+  to: string;
+  label: string;
+  icon: React.ElementType;
+  permission?: string;
+  requireSuperAdminOr?: string; // show if superadmin OR has this permission
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const sections: NavSection[] = [
   {
     title: 'Overview',
     items: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+      { to: '/', label: 'Dashboard', icon: LayoutDashboard, permission: 'dashboard_view' },
     ],
   },
   {
     title: 'Assets',
     items: [
-      { to: '/endpoints',       label: 'Endpoints',       icon: Laptop },
-      { to: '/monitors',        label: 'Monitors',        icon: Monitor },
-      { to: '/mobile-devices',  label: 'Mobile Devices',  icon: Smartphone },
-      { to: '/ip-phones',       label: 'IP Phones',       icon: Phone },
-      { to: '/servers',         label: 'Servers',         icon: Server },
-      { to: '/printers',        label: 'Printers',        icon: Printer },
-      { to: '/network-devices', label: 'Network Devices', icon: Network },
-      { to: '/other-assets',    label: 'Other Assets',    icon: Package },
+      { to: '/endpoints',       label: 'Endpoints',       icon: Laptop,      permission: 'endpoints_view' },
+      { to: '/monitors',        label: 'Monitors',        icon: Monitor,     permission: 'monitors_view' },
+      { to: '/mobile-devices',  label: 'Mobile Devices',  icon: Smartphone,  permission: 'mobile_devices_view' },
+      { to: '/ip-phones',       label: 'IP Phones',       icon: Phone,       permission: 'ip_phones_view' },
+      { to: '/servers',         label: 'Servers',         icon: Server,      permission: 'servers_view' },
+      { to: '/printers',        label: 'Printers',        icon: Printer,     permission: 'printers_view' },
+      { to: '/network-devices', label: 'Network Devices', icon: Network,     permission: 'network_devices_view' },
+      { to: '/other-assets',    label: 'Other Assets',    icon: Package,     permission: 'other_assets_view' },
     ],
   },
   {
     title: 'Operations',
     items: [
-      { to: '/incidents',  label: 'Incidents', icon: AlertTriangle },
-      { to: '/audit-logs', label: 'Audit Log', icon: ScrollText },
+      { to: '/incidents',  label: 'Incidents', icon: AlertTriangle, permission: 'incidents_view' },
+      { to: '/audit-logs', label: 'Audit Log', icon: ScrollText,    permission: 'audit_logs_view' },
     ],
   },
   {
     title: 'Master Data',
     items: [
-      { to: '/employees',   label: 'Employees',   icon: Users },
-      { to: '/departments', label: 'Departments', icon: Building2 },
-      { to: '/locations',   label: 'Locations',   icon: MapPin },
-      { to: '/vendors',     label: 'Vendors',     icon: Tag },
+      { to: '/employees',   label: 'Employees',   icon: Users,     permission: 'employees_view' },
+      { to: '/departments', label: 'Departments', icon: Building2, permission: 'departments_view' },
+      { to: '/locations',   label: 'Locations',   icon: MapPin,    permission: 'locations_view' },
+      { to: '/vendors',     label: 'Vendors',     icon: Tag,       permission: 'vendors_view' },
     ],
   },
   {
     title: 'System',
     items: [
-      { to: '/settings', label: 'Settings', icon: Settings },
+      { to: '/settings', label: 'Settings',          icon: Settings },
+      { to: '/users',    label: 'Users',              icon: UserCog,    requireSuperAdminOr: 'users_manage' },
+      { to: '/roles',    label: 'Roles & Permissions', icon: ShieldCheck, requireSuperAdminOr: 'roles_manage' },
     ],
   },
 ];
@@ -56,6 +73,22 @@ export default function Sidebar({
   collapsed: boolean;
   onToggle: () => void;
 }) {
+  const { hasPermission, isSuperAdmin } = useAuth();
+
+  const isVisible = (item: NavItem): boolean => {
+    // No permission constraint — always show (e.g. Settings)
+    if (!item.permission && !item.requireSuperAdminOr) return true;
+    // requireSuperAdminOr: show if superadmin OR has the named permission
+    if (item.requireSuperAdminOr) {
+      return isSuperAdmin() || hasPermission(item.requireSuperAdminOr);
+    }
+    // Regular permission check
+    if (item.permission) {
+      return hasPermission(item.permission);
+    }
+    return true;
+  };
+
   return (
     <aside
       className={clsx(
@@ -89,49 +122,54 @@ export default function Sidebar({
 
       {/* Nav */}
       <nav className={clsx('flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-5', collapsed ? 'px-2' : 'px-3')}>
-        {sections.map((section) => (
-          <div key={section.title}>
-            {!collapsed ? (
-              <div className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                {section.title}
-              </div>
-            ) : (
-              <div className="mx-3 mb-2 h-px bg-slate-100" />
-            )}
-            <ul className="space-y-0.5">
-              {section.items.map(({ to, label, icon: Icon }) => (
-                <li key={to}>
-                  <NavLink
-                    to={to}
-                    end={to === '/'}
-                    title={collapsed ? label : undefined}
-                    className={({ isActive }) =>
-                      clsx(
-                        'group relative flex items-center rounded-lg text-sm font-medium transition-colors',
-                        collapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2',
-                        isActive
-                          ? 'bg-brand-50 text-brand-700'
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
-                      )
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <Icon className={clsx('w-4 h-4 shrink-0', isActive && 'text-brand-600')} />
-                        {!collapsed && <span className="truncate">{label}</span>}
-                        {collapsed && (
-                          <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded-md bg-slate-900 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-40">
-                            {label}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+        {sections.map((section) => {
+          const visibleItems = section.items.filter(isVisible);
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={section.title}>
+              {!collapsed ? (
+                <div className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  {section.title}
+                </div>
+              ) : (
+                <div className="mx-3 mb-2 h-px bg-slate-100" />
+              )}
+              <ul className="space-y-0.5">
+                {visibleItems.map(({ to, label, icon: Icon }) => (
+                  <li key={to}>
+                    <NavLink
+                      to={to}
+                      end={to === '/'}
+                      title={collapsed ? label : undefined}
+                      className={({ isActive }) =>
+                        clsx(
+                          'group relative flex items-center rounded-lg text-sm font-medium transition-colors',
+                          collapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2',
+                          isActive
+                            ? 'bg-brand-50 text-brand-700'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                        )
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <Icon className={clsx('w-4 h-4 shrink-0', isActive && 'text-brand-600')} />
+                          {!collapsed && <span className="truncate">{label}</span>}
+                          {collapsed && (
+                            <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded-md bg-slate-900 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-40">
+                              {label}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
       </nav>
     </aside>
   );

@@ -7,6 +7,8 @@ export interface User {
   username: string;
   email: string;
   full_name: string;
+  role: string;
+  permissions: string[];
 }
 
 interface AuthCtx {
@@ -14,6 +16,8 @@ interface AuthCtx {
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  hasPermission: (key: string) => boolean;
+  isSuperAdmin: () => boolean;
 }
 
 const SESSION_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -88,8 +92,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearSession();
   };
 
+  const hasPermission = (key: string): boolean => {
+    if (!user) return false;
+    return user.role === 'superadmin' || (user.permissions ?? []).includes(key);
+  };
+
+  const isSuperAdmin = (): boolean => {
+    return user?.role === 'superadmin';
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, hasPermission, isSuperAdmin }}>
       {children}
     </AuthContext.Provider>
   );

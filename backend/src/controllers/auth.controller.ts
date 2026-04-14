@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import db from '../config/db';
 import { env } from '../config/env';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest, loadUserRoleAndPermissions } from '../middleware/auth';
 
 export async function login(req: Request, res: Response) {
   const { username, password } = req.body || {};
@@ -33,6 +33,8 @@ export async function login(req: Request, res: Response) {
 
   await db('users').where({ id: user.id }).update({ last_login_at: db.fn.now() });
 
+  const { role, permissions } = await loadUserRoleAndPermissions(user.id);
+
   res.json({
     token,
     user: {
@@ -40,6 +42,8 @@ export async function login(req: Request, res: Response) {
       username: user.username,
       email: user.email,
       full_name: user.full_name,
+      role,
+      permissions,
     },
   });
 }
@@ -50,7 +54,16 @@ export async function me(req: AuthRequest, res: Response) {
     .where({ id: req.user!.id })
     .first();
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json({ user });
+
+  const { role, permissions } = await loadUserRoleAndPermissions(req.user!.id);
+
+  res.json({
+    user: {
+      ...user,
+      role,
+      permissions,
+    },
+  });
 }
 
 export async function changePassword(req: AuthRequest, res: Response) {
