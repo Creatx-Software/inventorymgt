@@ -20,6 +20,7 @@ import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
 import UsersPage from './pages/UsersPage';
 import RolesPage from './pages/RolesPage';
+import ApprovalsPage from './pages/ApprovalsPage';
 
 export default function App() {
   return (
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/settings"        element={<Settings />} />
             <Route path="/users"           element={<UsersPage />} />
             <Route path="/roles"           element={<RolesPage />} />
+            <Route path="/approvals"       element={<ApprovalsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

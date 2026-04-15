@@ -58,7 +58,12 @@ export class AssetService {
         .leftJoin('locations', `${T}.location_id`, 'locations.id')
         .leftJoin('departments', `${T}.department_id`, 'departments.id')
         .leftJoin('employees', `${T}.employee_id`, 'employees.id')
-        .leftJoin('asset_statuses', `${T}.status_id`, 'asset_statuses.id');
+        .leftJoin('asset_statuses', `${T}.status_id`, 'asset_statuses.id')
+        .leftJoin(
+          db.raw(`(SELECT asset_id FROM pending_approvals WHERE asset_type = ? AND status = 'pending') AS pend`, [this.opts.assetType]),
+          `pend.asset_id`,
+          `${T}.id`,
+        );
       if (!params.includeDeleted) q.whereNull(`${T}.deleted_at`);
 
       if (params.search && this.opts.searchableColumns.length) {
@@ -105,6 +110,7 @@ export class AssetService {
         'employees.employee_code as employee_code',
         'asset_statuses.name as status_name',
         'asset_statuses.color as status_color',
+        db.raw('IF(pend.asset_id IS NOT NULL, 1, 0) as has_pending_approval'),
       )
       .orderBy(sortBy, sortDir)
       .limit(pageSize)
@@ -175,7 +181,7 @@ export class AssetService {
     });
   }
 
-  async update(id: number, data: Record<string, any>, userId: number | null) {
+  async update(id: number, data: Record<string, any>, userId: number | null, isSuperAdmin: boolean = true) {
     return db.transaction(async (trx) => {
       const before = await trx(this.opts.table).where({ id }).first();
       if (!before) throw new Error('Not found');
@@ -208,6 +214,30 @@ export class AssetService {
       }
 
       await trx(this.opts.table).where({ id }).update({ ...data, updated_at: trx.fn.now() });
+
+      // Non-superadmin edits → create/update pending approval
+      if (!isSuperAdmin && userId) {
+        const existing = await trx('pending_approvals')
+          .where({ asset_type: this.opts.assetType, asset_id: id, status: 'pending' })
+          .first();
+        if (existing) {
+          // Keep original before_data, update after_data
+          await trx('pending_approvals').where({ id: existing.id }).update({
+            after_data: JSON.stringify({ ...before, ...data }),
+            changed_by_user_id: userId,
+          });
+        } else {
+          await trx('pending_approvals').insert({
+            asset_type: this.opts.assetType,
+            asset_id: id,
+            changed_by_user_id: userId,
+            before_data: JSON.stringify(before),
+            after_data: JSON.stringify({ ...before, ...data }),
+            status: 'pending',
+          });
+        }
+      }
+
       return id;
     });
   }

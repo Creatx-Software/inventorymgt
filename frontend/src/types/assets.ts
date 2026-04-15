@@ -21,6 +21,7 @@ export interface AssetCommon {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  has_pending_approval?: number | boolean;
 }
 
 export interface Endpoint extends AssetCommon {
