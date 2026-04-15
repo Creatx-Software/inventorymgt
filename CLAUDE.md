@@ -66,7 +66,8 @@ inventory-mgt/
 │   │   │   ├── AuditLogs.tsx
 │   │   │   ├── Settings.tsx
 │   │   │   ├── UsersPage.tsx     # user management (superadmin/admin)
-│   │   │   └── RolesPage.tsx     # role & permission management
+│   │   │   ├── RolesPage.tsx     # role & permission management
+│   │   │   └── ApprovalsPage.tsx # pending approval review (superadmin only)
 │   │   ├── contexts/         # AuthContext (includes role + permissions)
 │   │   ├── hooks/
 │   │   ├── types/
@@ -100,7 +101,8 @@ inventory-mgt/
 ├── database/
 │   ├── migrations/
 │   │   ├── 20240101000000_init_schema.ts   # all base tables
-│   │   └── 20240102000000_rbac.ts          # roles, role_permissions, users.role_id
+│   │   ├── 20240102000000_rbac.ts          # roles, role_permissions, users.role_id
+│   │   └── 20240103000000_pending_approvals.ts  # pending_approvals table
 │   ├── seeds/
 │   │   ├── 01_asset_statuses.ts   # idempotent (skips existing rows)
 │   │   ├── 02_admin_user.ts       # seeds default admin
@@ -356,6 +358,23 @@ updated_at      TIMESTAMP
 | ip_address | VARCHAR(50) | |
 | created_at | TIMESTAMP | |
 
+#### `pending_approvals` (admin-edit approval workflow)
+| Column | Type | Notes |
+|---|---|---|
+| id | INT PK | |
+| asset_type | ENUM(...) | endpoint, monitor, mobile_device, etc. |
+| asset_id | INT | FK to relevant asset table |
+| changed_by_user_id | INT FK → users.id | who submitted the change |
+| before_data | JSON | snapshot of asset row before edit |
+| after_data | JSON | snapshot of asset row after edit |
+| status | ENUM('pending','approved','rejected') | default 'pending' |
+| reviewed_by_user_id | INT FK → users.id NULL | superadmin who acted |
+| reviewed_at | TIMESTAMP NULL | |
+| notes | TEXT NULL | rejection reason |
+| created_at | TIMESTAMP | |
+
+One record per asset — if admin edits again while pending, `after_data` is updated but `before_data` is preserved.
+
 ---
 
 ## API Endpoints
@@ -432,6 +451,14 @@ GET                  /api/incidents/:id
 GET    /api/audit-logs
 ```
 
+### Approvals
+```
+GET    /api/approvals              # list pending approvals (superadmin only); ?assetType= filter
+GET    /api/approvals/:id          # single approval with parsed JSON
+POST   /api/approvals/:id/approve  # approve — marks record approved (superadmin only)
+POST   /api/approvals/:id/reject   # reject — restores before_data to asset (superadmin only)
+```
+
 ---
 
 ## Frontend Pages
@@ -457,6 +484,7 @@ GET    /api/audit-logs
 | `/settings` | Settings | All users |
 | `/users` | User Management | `users_manage` or superadmin |
 | `/roles` | Roles & Permissions | `roles_manage` or superadmin |
+| `/approvals` | Pending Approvals | superadmin only |
 
 Sidebar items are filtered automatically based on the logged-in user's permissions.
 
@@ -629,7 +657,15 @@ npm run dev
 - Superadmin / admin / user system roles seeded
 - Permission-gated sidebar, API guards, Users page, Roles & Permissions page
 
-### Phase 8 — Polish (in progress)
+### Phase 8 — Approval Workflow ✅
+- Non-superadmin edits create a `pending_approvals` record with before/after JSON snapshots
+- Asset rows with pending approvals show an amber clock icon on the serial number column
+- `/approvals` page (superadmin only): asset type filter bar, pending items list
+- Review drawer: shows all fields, changed fields highlighted red/green at top
+- Approve action: marks record approved, asset retains the edit
+- Reject action: restores `before_data` to the asset table, marks record rejected
+
+### Phase 9 — Polish (in progress)
 - Keyboard shortcuts, saved views, column toggles
 - Soft-delete restore UI, bulk operations
 

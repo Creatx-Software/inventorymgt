@@ -478,7 +478,7 @@ export default function ApprovalsPage() {
                   const after = typeof approval.after_data === 'string'
                     ? JSON.parse(approval.after_data)
                     : approval.after_data;
-                  const diffCount = getDiffFields(before, after).length;
+                  const diffCount = getChangedCount(getDiffFields(before, after));
 
                   return (
                     <tr
