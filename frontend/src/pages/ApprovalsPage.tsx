@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { approvalsApi } from '../api/approvals';
+import { employeesApi, vendorsApi, locationsApi, departmentsApi } from '../api/lookups';
+import { assetStatusesApi } from '../api/assets';
+import type { Employee, Vendor, Location, Department } from '../types/api';
+import type { AssetStatus } from '../types/assets';
 import { Loader2, CheckCircle, XCircle, Clock, X, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -45,7 +49,7 @@ const ASSET_TYPE_BADGE_COLORS: Record<string, string> = {
 // Fields to skip in the diff view
 const SKIP_FIELD_SUFFIXES = ['_name', '_color', '_code'];
 const SKIP_FIELD_EXACT = new Set([
-  'has_pending_approval', 'updated_at', 'created_at',
+  'id', 'has_pending_approval', 'updated_at', 'created_at',
   'vendor_name', 'location_name', 'department_name',
   'employee_name', 'employee_code', 'status_name', 'status_color',
 ]);
@@ -80,13 +84,16 @@ function getChangedCount(rows: Array<{ changed: boolean }>): number {
   return rows.filter((r) => r.changed).length;
 }
 
-function formatFieldValue(value: any): string {
-  if (value === null || value === undefined) return '—';
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  return String(value);
-}
 
 function humanizeField(field: string): string {
+  const FK_LABELS: Record<string, string> = {
+    employee_id: 'Employee',
+    vendor_id: 'Vendor / Make',
+    location_id: 'Location',
+    department_id: 'Department',
+    status_id: 'Status',
+  };
+  if (FK_LABELS[field]) return FK_LABELS[field];
   return field
     .replace(/_id$/, ' ID')
     .replace(/_/g, ' ')
@@ -95,12 +102,17 @@ function humanizeField(field: string): string {
 
 interface DiffDrawerProps {
   approval: PendingApproval;
+  employees: Employee[];
+  vendors: Vendor[];
+  locations: Location[];
+  departments: Department[];
+  statuses: AssetStatus[];
   onClose: () => void;
   onApproved: (id: number) => void;
   onRejected: (id: number) => void;
 }
 
-function DiffDrawer({ approval, onClose, onApproved, onRejected }: DiffDrawerProps) {
+function DiffDrawer({ approval, employees, vendors, locations, departments, statuses, onClose, onApproved, onRejected }: DiffDrawerProps) {
   const [actionLoading, setActionLoading] = useState<'approve' | 'reject' | null>(null);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectNotes, setRejectNotes] = useState('');
@@ -115,6 +127,22 @@ function DiffDrawer({ approval, onClose, onApproved, onRejected }: DiffDrawerPro
 
   const allFields = getDiffFields(before, after);
   const changedCount = getChangedCount(allFields);
+
+  const resolveFieldValue = (field: string, value: any): string => {
+    if (value === null || value === undefined || value === '') return '—';
+    const n = Number(value);
+    if (field === 'employee_id') {
+      const emp = employees.find((e) => e.id === n);
+      if (!emp) return String(value);
+      return emp.employee_code ? `${emp.full_name} (${emp.employee_code})` : emp.full_name;
+    }
+    if (field === 'vendor_id') return vendors.find((v) => v.id === n)?.name || String(value);
+    if (field === 'location_id') return locations.find((l) => l.id === n)?.name || String(value);
+    if (field === 'department_id') return departments.find((d) => d.id === n)?.name || String(value);
+    if (field === 'status_id') return statuses.find((s) => s.id === n)?.name || String(value);
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    return String(value);
+  };
 
   const handleApprove = async () => {
     setActionLoading('approve');
@@ -225,10 +253,10 @@ function DiffDrawer({ approval, onClose, onApproved, onRejected }: DiffDrawerPro
                           {row.changed && <span className="ml-1.5 text-[10px] text-amber-500 font-semibold uppercase tracking-wider">changed</span>}
                         </td>
                         <td className={clsx('px-3 py-2.5 text-xs font-mono', row.changed ? 'bg-red-50 text-red-700' : 'text-slate-500')}>
-                          {formatFieldValue(row.before)}
+                          {resolveFieldValue(row.field, row.before)}
                         </td>
                         <td className={clsx('px-3 py-2.5 text-xs font-mono', row.changed ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500')}>
-                          {formatFieldValue(row.after)}
+                          {resolveFieldValue(row.field, row.after)}
                         </td>
                       </tr>
                     ))}
@@ -318,6 +346,11 @@ function DiffDrawer({ approval, onClose, onApproved, onRejected }: DiffDrawerPro
 export default function ApprovalsPage() {
   const { isSuperAdmin } = useAuth();
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [statuses, setStatuses] = useState<AssetStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -334,7 +367,22 @@ export default function ApprovalsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    Promise.all([
+      employeesApi.list({ pageSize: 1000 }),
+      vendorsApi.list({ pageSize: 500 }),
+      locationsApi.list({ pageSize: 500 }),
+      departmentsApi.list({ pageSize: 500 }),
+      assetStatusesApi.list(),
+    ]).then(([e, v, l, d, s]) => {
+      setEmployees(e.data);
+      setVendors(v.data);
+      setLocations(l.data);
+      setDepartments(d.data);
+      setStatuses(s);
+    }).catch(() => {});
+  }, []);
 
   // Count per asset type
   const countByType: Record<string, number> = {};
@@ -535,6 +583,11 @@ export default function ApprovalsPage() {
       {selectedApproval && (
         <DiffDrawer
           approval={selectedApproval}
+          employees={employees}
+          vendors={vendors}
+          locations={locations}
+          departments={departments}
+          statuses={statuses}
           onClose={() => setSelectedId(null)}
           onApproved={handleApproved}
           onRejected={handleRejected}
