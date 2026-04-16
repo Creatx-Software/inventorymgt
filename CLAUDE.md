@@ -542,6 +542,7 @@ Sidebar items are filtered automatically based on the logged-in user's permissio
 - Default sort: **Host name A → Z**
 - Status column is **sortable** (sorts by status name via `asset_statuses.name`)
 - `endpoint_type` options: Laptop, Desktop, Other — **Scanner is not offered in the UI** (DB ENUM still includes it for existing records)
+- **EOL auto-calculate**: PO number format `PO/ICICIUK/DD/MM/YYYY/suffix` — the date is extracted and EOL = purchase date + 5 years. Shown as a suggestion in the edit drawer. Script `npm run update-eol` bulk-updates all existing records.
 
 ---
 
@@ -610,6 +611,7 @@ npm run migrate           # knex migrate:latest (run after pulling new migration
 npm run migrate:rollback
 npm run seed              # idempotent — safe to re-run
 npm run import-excel      # one-time migration of the source xlsx
+npm run update-eol        # one-time: calculate eol_date from po_number for all endpoints (PO date + 5 years)
 
 # Frontend
 cd frontend
