@@ -31,7 +31,7 @@ export interface AssetPageProps<T extends AssetCommon, ExtraForm extends Record<
   emptyExtra: ExtraForm;
   extraToPayload: (extra: ExtraForm) => Record<string, any>;
   rowToExtra: (row: T) => ExtraForm;
-  renderExtraFields: (extra: ExtraForm, setExtra: (e: ExtraForm) => void) => ReactNode;
+  renderExtraFields: (extra: ExtraForm, setExtra: (e: ExtraForm) => void, common: CommonFormState) => ReactNode;
 }
 
 export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string, any>>({
@@ -211,7 +211,7 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
             />
             <div className="border-t border-slate-200 pt-5">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Type-Specific Details</div>
-              {renderExtraFields(extra, setExtra)}
+              {renderExtraFields(extra, setExtra, common)}
             </div>
           </div>
         )}

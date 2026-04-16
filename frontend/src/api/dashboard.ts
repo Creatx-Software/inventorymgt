@@ -13,9 +13,16 @@ export interface DashboardSummary {
 export interface WarrantyAlert {
   asset_type: string;
   asset_table: string;
+  asset_label: string;
   id: number;
   serial_number: string;
   asset_name: string | null;
+  model: string | null;
+  vendor_name: string | null;
+  location_name: string | null;
+  department_name: string | null;
+  employee_name: string | null;
+  employee_code: string | null;
   expiry_date: string;
   days_remaining: number;
 }

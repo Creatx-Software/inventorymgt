@@ -52,7 +52,7 @@ export default function NetworkDevicesPage() {
         warranty_expiry_date: r.warranty_expiry_date ? r.warranty_expiry_date.slice(0, 10) : '',
         eol_date: r.eol_date ? r.eol_date.slice(0, 10) : '',
       })}
-      renderExtraFields={(extra, set) => (
+      renderExtraFields={(extra, set, _common) => (
         <div className="grid grid-cols-2 gap-4">
           <div><label className="label">Device Name</label><input className="input" value={extra.device_name} onChange={(e) => set({ ...extra, device_name: e.target.value })} /></div>
           <div><label className="label">Host Name</label><input className="input" value={extra.host_name} onChange={(e) => set({ ...extra, host_name: e.target.value })} /></div>

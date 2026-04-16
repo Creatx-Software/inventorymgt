@@ -92,7 +92,7 @@ export default function OtherAssetsPage() {
         emptyExtra={empty}
         extraToPayload={(e) => ({ host_name: e.host_name || null })}
         rowToExtra={(r) => ({ host_name: r.host_name || '' })}
-        renderExtraFields={(extra, set) => (
+        renderExtraFields={(extra, set, _common) => (
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Host Name</label>

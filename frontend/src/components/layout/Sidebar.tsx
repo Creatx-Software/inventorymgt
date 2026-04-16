@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Laptop, Monitor, Smartphone, Phone, Server,
   Printer, Network, Package, AlertTriangle, Users, Building2,
   MapPin, Tag, ScrollText, Settings, Boxes, ChevronsLeft, ChevronsRight,
-  UserCog, ShieldCheck, CheckSquare,
+  UserCog, ShieldCheck, CheckSquare, ShieldAlert,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -44,9 +44,10 @@ const sections: NavSection[] = [
   {
     title: 'Operations',
     items: [
-      { to: '/incidents',  label: 'Incidents',  icon: AlertTriangle, permission: 'incidents_view' },
-      { to: '/audit-logs', label: 'Audit Log',  icon: ScrollText,    permission: 'audit_logs_view' },
-      { to: '/approvals',  label: 'Approvals',  icon: CheckSquare,   requireSuperAdminOr: 'roles_manage' },
+      { to: '/incidents',  label: 'Incidents',       icon: AlertTriangle, permission: 'incidents_view' },
+      { to: '/warranty',   label: 'Warranty & EOL',  icon: ShieldAlert,   permission: 'dashboard_view' },
+      { to: '/audit-logs', label: 'Audit Log',        icon: ScrollText,    permission: 'audit_logs_view' },
+      { to: '/approvals',  label: 'Approvals',        icon: CheckSquare,   requireSuperAdminOr: 'roles_manage' },
     ],
   },
   {
