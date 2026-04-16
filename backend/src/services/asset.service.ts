@@ -259,6 +259,27 @@ export class AssetService {
     return true;
   }
 
+  async hardDelete(id: number) {
+    return db.transaction(async (trx) => {
+      await trx('serial_registry').where({ asset_type: this.opts.assetType, asset_id: id }).delete();
+      await trx('asset_assignments').where({ asset_type: this.opts.assetType, asset_id: id }).delete();
+      await trx('pending_approvals').where({ asset_type: this.opts.assetType, asset_id: id }).delete();
+      await trx(this.opts.table).where({ id }).delete();
+      return true;
+    });
+  }
+
+  async bulkHardDelete(ids: number[]) {
+    if (!ids.length) return 0;
+    return db.transaction(async (trx) => {
+      await trx('serial_registry').where({ asset_type: this.opts.assetType }).whereIn('asset_id', ids).delete();
+      await trx('asset_assignments').where({ asset_type: this.opts.assetType }).whereIn('asset_id', ids).delete();
+      await trx('pending_approvals').where({ asset_type: this.opts.assetType }).whereIn('asset_id', ids).delete();
+      const n = await trx(this.opts.table).whereIn('id', ids).delete();
+      return n;
+    });
+  }
+
   async bulkDelete(ids: number[]) {
     if (!ids.length) return 0;
     return db.transaction(async (trx) => {

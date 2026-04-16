@@ -84,5 +84,27 @@ export function buildAssetRouter(opts: AssetCrudOptions) {
     res.json({ deleted: n });
   });
 
+  router.delete('/:id/permanent', requirePermission(`${perm}_delete`), async (req: AuthRequest, res) => {
+    try {
+      const id = Number(req.params.id);
+      await svc.hardDelete(id);
+      await audit({ userId: req.user!.id, action: 'DELETE', entityType: opts.assetType, entityId: id, changes: { permanent: true }, ipAddress: req.ip });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  router.post('/bulk-permanent-delete', requirePermission(`${perm}_delete`), async (req: AuthRequest, res) => {
+    try {
+      const ids: number[] = req.body?.ids || [];
+      const n = await svc.bulkHardDelete(ids);
+      await audit({ userId: req.user!.id, action: 'DELETE', entityType: opts.assetType, changes: { ids, permanent: true }, ipAddress: req.ip });
+      res.json({ deleted: n });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
   return router;
 }
