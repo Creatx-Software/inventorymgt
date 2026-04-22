@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Laptop, Monitor, Smartphone, Phone, Server,
   Printer, Network, Package, AlertTriangle, Users, Building2,
   MapPin, Tag, ScrollText, Settings, Boxes, ChevronsLeft, ChevronsRight,
-  UserCog, ShieldCheck, CheckSquare, ShieldAlert,
+  UserCog, ShieldCheck, CheckSquare, ShieldAlert, PackageOpen,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -39,6 +39,7 @@ const sections: NavSection[] = [
       { to: '/printers',        label: 'Printers',        icon: Printer,     permission: 'printers_view' },
       { to: '/network-devices', label: 'Network Devices', icon: Network,     permission: 'network_devices_view' },
       { to: '/other-assets',    label: 'Other Assets',    icon: Package,     permission: 'other_assets_view' },
+      { to: '/consumables',     label: 'Consumable Stock', icon: PackageOpen, permission: 'consumables_view' },
     ],
   },
   {

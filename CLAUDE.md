@@ -160,7 +160,7 @@ System roles seeded: **superadmin** (all permissions), **admin** (all except `ro
 | UNIQUE(role_id, permission) | | |
 
 Permission key format: `{resource}_{action}` where action is `view`, `create`, `edit`, or `delete`.
-Resources: `dashboard`, `endpoints`, `monitors`, `mobile_devices`, `ip_phones`, `servers`, `printers`, `network_devices`, `other_assets`, `incidents`, `employees`, `departments`, `locations`, `vendors`, `audit_logs`.
+Resources: `dashboard`, `endpoints`, `monitors`, `mobile_devices`, `ip_phones`, `servers`, `printers`, `network_devices`, `other_assets`, `incidents`, `employees`, `departments`, `locations`, `vendors`, `audit_logs`, `consumables`.
 Special: `users_manage`, `roles_manage`.
 
 #### `employees` (asset owners — NOT login users)
@@ -358,6 +358,38 @@ updated_at      TIMESTAMP
 | ip_address | VARCHAR(50) | |
 | created_at | TIMESTAMP | |
 
+#### `consumable_items` (bulk/non-serialised stock catalogue)
+| Column | Type | Notes |
+|---|---|---|
+| id | INT PK | |
+| name | VARCHAR(255) | e.g. "USB-C Cable 1m", "iPhone 14 Back Cover" |
+| category | VARCHAR(100) NULL | Cables, Phone Parts, Accessories, etc. |
+| description | TEXT NULL | |
+| vendor_id | INT FK → vendors.id NULL | |
+| location_id | INT FK → locations.id NULL | Where stock is physically stored |
+| unit | VARCHAR(50) | each, pair, pack, roll — default "each" |
+| current_stock | INT | Live count, updated atomically on every transaction |
+| minimum_stock | INT NULL | Alert threshold for low-stock badge |
+| po_number | VARCHAR(100) NULL | |
+| invoice_number | VARCHAR(100) NULL | |
+| remarks | TEXT NULL | |
+| deleted_at | TIMESTAMP NULL | |
+| created_at, updated_at | TIMESTAMP | |
+
+#### `consumable_transactions` (every stock movement — full audit trail)
+| Column | Type | Notes |
+|---|---|---|
+| id | INT PK | |
+| consumable_item_id | INT FK → consumable_items.id | |
+| transaction_type | ENUM('stock_in','assigned','returned') | stock_in +qty; assigned −qty; returned +qty |
+| quantity | INT UNSIGNED | Always positive |
+| employee_id | INT FK → employees.id NULL | Set for assigned/returned |
+| performed_by_user_id | INT FK → users.id | |
+| transaction_date | DATE | |
+| reference_number | VARCHAR(100) NULL | PO/delivery ref for stock_in |
+| notes | TEXT NULL | |
+| created_at | TIMESTAMP | |
+
 #### `pending_approvals` (admin-edit approval workflow)
 | Column | Type | Notes |
 |---|---|---|
@@ -451,6 +483,22 @@ GET                  /api/incidents/:id
 GET    /api/audit-logs
 ```
 
+### Consumables
+```
+GET    /api/consumables                      # list (page, search, sortBy, sortDir, category, includeDeleted)
+GET    /api/consumables/:id                  # single item
+POST   /api/consumables                      # create
+PUT    /api/consumables/:id                  # update
+DELETE /api/consumables/:id                  # soft delete
+POST   /api/consumables/:id/restore
+POST   /api/consumables/:id/stock-in         # { quantity, transaction_date, reference_number?, notes? }
+POST   /api/consumables/:id/assign           # { quantity, employee_id, transaction_date, notes? } — decrements stock
+POST   /api/consumables/:id/return           # { quantity, employee_id, transaction_date, notes? } — increments stock
+GET    /api/consumables/:id/transactions     # full movement log DESC
+GET    /api/consumables/:id/assignments      # net qty per employee (only those with net_quantity > 0)
+GET    /api/consumables/meta/categories      # distinct category values
+```
+
 ### Approvals
 ```
 GET    /api/approvals              # list pending approvals (superadmin only); ?assetType= filter
@@ -485,6 +533,7 @@ POST   /api/approvals/:id/reject   # reject — restores before_data to asset (s
 | `/users` | User Management | `users_manage` or superadmin |
 | `/roles` | Roles & Permissions | `roles_manage` or superadmin |
 | `/approvals` | Pending Approvals | superadmin only |
+| `/consumables` | Consumable Stock | `consumables_view` |
 
 Sidebar items are filtered automatically based on the logged-in user's permissions.
 
@@ -670,6 +719,18 @@ npm run dev
 ### Phase 9 — Polish (in progress)
 - Keyboard shortcuts, saved views, column toggles
 - Soft-delete restore UI, bulk operations
+
+### Phase 10 — Consumable Stock ✅
+- Non-serialised bulk items (cables, back covers, adapters, etc.) tracked by quantity
+- Two new tables: `consumable_items` (catalogue) + `consumable_transactions` (every movement)
+- Three transaction types: `stock_in` (restock), `assigned` (to employee, decrements stock), `returned` (from employee, increments stock)
+- Stock count is live in `consumable_items.current_stock`, updated atomically in a DB transaction
+- Low-stock badge (amber) when `current_stock <= minimum_stock`; out-of-stock badge (red) when 0
+- Per-row action buttons: Add Stock, Assign to Employee, Return from Employee
+- Transaction History drawer: full movement log + "Current Holders" tab (net qty per employee)
+- Category filter tabs (derived from distinct categories in the table)
+- Permission resource: `consumables` — view/create/edit/delete; seeded for all system roles via migration `20240104000001`
+- Route: `/consumables`; sidebar item under Assets section
 
 ---
 

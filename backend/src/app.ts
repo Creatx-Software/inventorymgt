@@ -17,6 +17,7 @@ import { employeeAssetsRouter } from './controllers/employee-assets.controller';
 import { rolesRouter } from './controllers/roles.controller';
 import { usersRouter } from './controllers/users.controller';
 import { approvalsRouter } from './controllers/approvals.controller';
+import { consumablesRouter } from './controllers/consumables.controller';
 import { notFound, errorHandler } from './middleware/error';
 
 const app = express();
@@ -50,6 +51,7 @@ app.use(`${env.apiPrefix}/employees`, employeeAssetsRouter);
 app.use(`${env.apiPrefix}/roles`, rolesRouter);
 app.use(`${env.apiPrefix}/users`, usersRouter);
 app.use(`${env.apiPrefix}/approvals`, approvalsRouter);
+app.use(`${env.apiPrefix}/consumables`, consumablesRouter);
 
 app.use(notFound);
 app.use(errorHandler);

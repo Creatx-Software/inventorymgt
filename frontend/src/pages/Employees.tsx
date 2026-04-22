@@ -6,7 +6,9 @@ import { Drawer } from '../components/ui/Drawer';
 import { employeesApi, departmentsApi, locationsApi } from '../api/lookups';
 import { api } from '../api/client';
 import type { Employee, Department, Location } from '../types/api';
-import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen } from 'lucide-react';
+import { consumablesApi } from '../api/consumables';
+import type { ConsumableAssignment } from '../types/api';
 
 interface AssetGroup {
   key: string;
@@ -34,7 +36,7 @@ export default function EmployeesPage() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [tab, setTab] = useState<'details' | 'assets'>('details');
+  const [tab, setTab] = useState<'details' | 'assets' | 'consumables'>('details');
   const [form, setForm] = useState({
     employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true, needs_review: false,
   });
@@ -44,6 +46,8 @@ export default function EmployeesPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [assets, setAssets] = useState<EmployeeAssets | null>(null);
   const [assetsLoading, setAssetsLoading] = useState(false);
+  const [consumables, setConsumables] = useState<import('../types/api').EmployeeConsumable[] | null>(null);
+  const [consumablesLoading, setConsumablesLoading] = useState(false);
 
   const fetcher = useCallback((p: any) => employeesApi.list(p), [reloadKey]);
 
@@ -86,6 +90,7 @@ export default function EmployeesPage() {
     setEditing(null);
     setTab('details');
     setAssets(null);
+    setConsumables(null);
     setForm({ employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true, needs_review: false });
     setOpen(true);
   };
@@ -94,6 +99,7 @@ export default function EmployeesPage() {
     setEditing(row);
     setTab('details');
     setAssets(null);
+    setConsumables(null);
     setForm({
       employee_code: row.employee_code || '',
       full_name: row.full_name,
@@ -115,8 +121,18 @@ export default function EmployeesPage() {
     } finally { setAssetsLoading(false); }
   };
 
+  const loadConsumables = async () => {
+    if (!editing) return;
+    setConsumablesLoading(true);
+    try {
+      const data = await consumablesApi.getByEmployee(editing.id);
+      setConsumables(data);
+    } finally { setConsumablesLoading(false); }
+  };
+
   useEffect(() => {
     if (tab === 'assets' && editing) loadAssets();
+    if (tab === 'consumables' && editing) loadConsumables();
   }, [tab, editing]);
 
   const save = async () => {
@@ -211,6 +227,20 @@ export default function EmployeesPage() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setTab('consumables')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition flex items-center gap-1.5 ${
+                tab === 'consumables' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <PackageOpen className="w-3.5 h-3.5" />
+              Consumables
+              {consumables && consumables.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-brand-100 text-brand-700">
+                  {consumables.length}
+                </span>
+              )}
+            </button>
           </div>
         )}
 
@@ -267,6 +297,44 @@ export default function EmployeesPage() {
                 </span>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Consumables tab */}
+        {tab === 'consumables' && (
+          <div>
+            {consumablesLoading && (
+              <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-brand-600" /></div>
+            )}
+            {!consumablesLoading && consumables && consumables.length === 0 && (
+              <div className="text-center text-sm text-slate-400 py-12">
+                No consumable items currently held by this employee.
+              </div>
+            )}
+            {!consumablesLoading && consumables && consumables.length > 0 && (
+              <div className="space-y-2">
+                {consumables.map((item) => (
+                  <div key={item.consumable_item_id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-slate-900">{item.name}</div>
+                      {item.category && (
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 mt-0.5 inline-block">
+                          {item.category}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0 ml-4">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {item.net_quantity} <span className="font-normal text-slate-500">{item.unit}</span>
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {item.total_assigned} assigned · {item.total_returned} returned
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

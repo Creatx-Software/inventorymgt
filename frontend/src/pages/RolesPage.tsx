@@ -37,6 +37,7 @@ const PERM_CATEGORIES: PermCategory[] = [
   { label: 'Departments',      resource: 'departments',     actions: ['view', 'create', 'edit', 'delete'] },
   { label: 'Locations',        resource: 'locations',       actions: ['view', 'create', 'edit', 'delete'] },
   { label: 'Vendors',          resource: 'vendors',         actions: ['view', 'create', 'edit', 'delete'] },
+  { label: 'Consumable Stock', resource: 'consumables',     actions: ['view', 'create', 'edit', 'delete'] },
   { label: 'Audit Logs',       resource: 'audit_logs',      actions: ['view'] },
   {
     label: 'User Management',
@@ -98,12 +99,23 @@ export default function RolesPage() {
     loadRoles();
   }, [loadRoles]);
 
+  // All permission keys that exist in the matrix + special permissions
+  const ALL_PERMISSION_KEYS = new Set<string>([
+    ...PERM_CATEGORIES.flatMap((c) => c.actions.map((a) => `${c.resource}_${a}`)),
+    ...SPECIAL_PERMISSIONS.map((sp) => sp.key),
+  ]);
+
   const selectRole = async (role: Role) => {
     setSelectedRole(role);
     setLoadingPerms(true);
     try {
       const res = await rolesApi.get(role.id);
-      setSelectedPermissions(new Set(res.data.permissions as string[]));
+      // Superadmin bypasses all permission checks — always show every box ticked
+      if (role.name === 'superadmin') {
+        setSelectedPermissions(new Set(ALL_PERMISSION_KEYS));
+      } else {
+        setSelectedPermissions(new Set(res.data.permissions as string[]));
+      }
     } catch {
       setMessage({ type: 'error', text: 'Failed to load role permissions' });
     } finally {
