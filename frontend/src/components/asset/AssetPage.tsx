@@ -34,11 +34,12 @@ export interface AssetPageProps<T extends AssetCommon, ExtraForm extends Record<
   extraToPayload: (extra: ExtraForm) => Record<string, any>;
   rowToExtra: (row: T) => ExtraForm;
   renderExtraFields: (extra: ExtraForm, setExtra: (e: ExtraForm) => void, common: CommonFormState) => ReactNode;
+  defaultSorting?: { id: string; desc: boolean }[];
 }
 
 export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string, any>>({
   title, subtitle, resource, assetType, api, columns, stickyColumnIds,
-  emptyExtra, extraToPayload, rowToExtra, renderExtraFields,
+  emptyExtra, extraToPayload, rowToExtra, renderExtraFields, defaultSorting,
 }: AssetPageProps<T, ExtraForm>) {
   const { hasPermission } = useAuth();
   const perm = `${assetType}s`; // e.g. 'endpoint' → 'endpoints'
@@ -146,6 +147,7 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
         onBulkHardDelete={canDelete ? async (ids) => { await api.bulkHardDelete(ids); setReloadKey((k) => k + 1); } : undefined}
         stickyColumnIds={stickyColumnIds}
         viewKey={`asset-${assetType}`}
+        defaultSorting={defaultSorting}
         extraActions={
           canCreate ? (
             <button onClick={() => setImportOpen(true)} className="btn-secondary">

@@ -32,6 +32,8 @@ export interface DataTableProps<T extends { id: number }> {
   extraActions?: React.ReactNode | ((ctx: { selectedIds: number[] }) => React.ReactNode);
   /** Unique key used to persist column visibility + pageSize in localStorage */
   viewKey?: string;
+  /** Initial sort state — column id + direction */
+  defaultSorting?: { id: string; desc: boolean }[];
 }
 
 export function DataTable<T extends { id: number; deleted_at?: string | null }>({
@@ -42,6 +44,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
   stickyColumnIds = [],
   extraActions,
   viewKey,
+  defaultSorting = [],
 }: DataTableProps<T>) {
   const storageKey = viewKey ? `dt:${viewKey}` : null;
   const loadPersisted = () => {
@@ -63,7 +66,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
   const [pageSize, setPageSize] = useState<number>(persisted.pageSize);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>(defaultSorting);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(persisted.visibility);
   const [showColMenu, setShowColMenu] = useState(false);

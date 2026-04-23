@@ -6,7 +6,7 @@ import { Drawer } from '../components/ui/Drawer';
 import { employeesApi, departmentsApi, locationsApi } from '../api/lookups';
 import { api } from '../api/client';
 import type { Employee, Department, Location } from '../types/api';
-import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen, Copy, Check } from 'lucide-react';
 import { consumablesApi } from '../api/consumables';
 import type { ConsumableAssignment } from '../types/api';
 
@@ -31,6 +31,22 @@ const typeRoutes: Record<string, string> = {
   endpoint: '/endpoints', monitor: '/monitors', mobile_device: '/mobile-devices', ip_phone: '/ip-phones',
   server: '/servers', printer: '/printers', network_device: '/network-devices', other_asset: '/other-assets',
 };
+
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!value) return null;
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button type="button" onClick={handleCopy} className="ml-1.5 text-slate-400 hover:text-brand-600 transition-colors" title="Copy to clipboard">
+      {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+    </button>
+  );
+}
 
 export default function EmployeesPage() {
   const navigate = useNavigate();
@@ -248,26 +264,26 @@ export default function EmployeesPage() {
         {tab === 'details' && (
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-1">
-              <label className="label">Employee ID</label>
+              <label className="label flex items-center">Employee ID <CopyButton value={form.employee_code} /></label>
               <input className="input" value={form.employee_code} onChange={(e) => setForm({ ...form, employee_code: e.target.value })} />
             </div>
             <div className="col-span-1">
-              <label className="label">Full Name *</label>
+              <label className="label flex items-center">Full Name * <CopyButton value={form.full_name} /></label>
               <input className="input" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} autoFocus />
             </div>
             <div className="col-span-2">
-              <label className="label">Email</label>
+              <label className="label flex items-center">Email <CopyButton value={form.email} /></label>
               <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div className="col-span-1">
-              <label className="label">Department</label>
+              <label className="label flex items-center">Department <CopyButton value={deptName(form.department_id ? Number(form.department_id) : null)} /></label>
               <select className="input" value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>
                 <option value="">— None —</option>
                 {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </div>
             <div className="col-span-1">
-              <label className="label">Location</label>
+              <label className="label flex items-center">Location <CopyButton value={locName(form.location_id ? Number(form.location_id) : null)} /></label>
               <select className="input" value={form.location_id} onChange={(e) => setForm({ ...form, location_id: e.target.value })}>
                 <option value="">— None —</option>
                 {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}

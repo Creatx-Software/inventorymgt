@@ -118,6 +118,7 @@ export default function EndpointsPage() {
         api={filteredApi}
         columns={columns}
         stickyColumnIds={['host_name']}
+        defaultSorting={[{ id: 'host_name', desc: false }]}
         emptyExtra={empty}
         extraToPayload={(e) => ({
           endpoint_type: e.endpoint_type,
