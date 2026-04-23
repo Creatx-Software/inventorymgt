@@ -58,7 +58,12 @@ export class AssetService {
         .leftJoin('locations', `${T}.location_id`, 'locations.id')
         .leftJoin('departments', `${T}.department_id`, 'departments.id')
         .leftJoin('employees', `${T}.employee_id`, 'employees.id')
-        .leftJoin('asset_statuses', `${T}.status_id`, 'asset_statuses.id');
+        .leftJoin('asset_statuses', `${T}.status_id`, 'asset_statuses.id')
+        .leftJoin(
+          db.raw(`(SELECT asset_id FROM pending_approvals WHERE asset_type = ? AND status = 'pending') AS pend`, [this.opts.assetType]),
+          `pend.asset_id`,
+          `${T}.id`,
+        );
       if (!params.includeDeleted) q.whereNull(`${T}.deleted_at`);
 
       if (params.search && this.opts.searchableColumns.length) {
@@ -82,9 +87,16 @@ export class AssetService {
       return q;
     };
 
+    const JOIN_SORT_MAP: Record<string, string> = {
+      status_name: 'asset_statuses.name',
+      vendor_name: 'vendors.name',
+      location_name: 'locations.name',
+      department_name: 'departments.name',
+      employee_name: 'employees.full_name',
+    };
     const sortBy =
       params.sortBy && this.opts.allowedSortColumns.includes(params.sortBy)
-        ? `${T}.${params.sortBy}`
+        ? (JOIN_SORT_MAP[params.sortBy] ?? `${T}.${params.sortBy}`)
         : `${T}.${this.opts.defaultSort?.column || 'id'}`;
     const sortDir = params.sortDir === 'asc' ? 'asc' : 'desc';
 
@@ -98,6 +110,7 @@ export class AssetService {
         'employees.employee_code as employee_code',
         'asset_statuses.name as status_name',
         'asset_statuses.color as status_color',
+        db.raw('IF(pend.asset_id IS NOT NULL, 1, 0) as has_pending_approval'),
       )
       .orderBy(sortBy, sortDir)
       .limit(pageSize)
@@ -168,7 +181,7 @@ export class AssetService {
     });
   }
 
-  async update(id: number, data: Record<string, any>, userId: number | null) {
+  async update(id: number, data: Record<string, any>, userId: number | null, isSuperAdmin: boolean = true) {
     return db.transaction(async (trx) => {
       const before = await trx(this.opts.table).where({ id }).first();
       if (!before) throw new Error('Not found');
@@ -201,6 +214,30 @@ export class AssetService {
       }
 
       await trx(this.opts.table).where({ id }).update({ ...data, updated_at: trx.fn.now() });
+
+      // Non-superadmin edits → create/update pending approval
+      if (!isSuperAdmin && userId) {
+        const existing = await trx('pending_approvals')
+          .where({ asset_type: this.opts.assetType, asset_id: id, status: 'pending' })
+          .first();
+        if (existing) {
+          // Keep original before_data, update after_data
+          await trx('pending_approvals').where({ id: existing.id }).update({
+            after_data: JSON.stringify({ ...before, ...data }),
+            changed_by_user_id: userId,
+          });
+        } else {
+          await trx('pending_approvals').insert({
+            asset_type: this.opts.assetType,
+            asset_id: id,
+            changed_by_user_id: userId,
+            before_data: JSON.stringify(before),
+            after_data: JSON.stringify({ ...before, ...data }),
+            status: 'pending',
+          });
+        }
+      }
+
       return id;
     });
   }
@@ -220,6 +257,27 @@ export class AssetService {
   async restore(id: number) {
     await db(this.opts.table).where({ id }).update({ deleted_at: null });
     return true;
+  }
+
+  async hardDelete(id: number) {
+    return db.transaction(async (trx) => {
+      await trx('serial_registry').where({ asset_type: this.opts.assetType, asset_id: id }).delete();
+      await trx('asset_assignments').where({ asset_type: this.opts.assetType, asset_id: id }).delete();
+      await trx('pending_approvals').where({ asset_type: this.opts.assetType, asset_id: id }).delete();
+      await trx(this.opts.table).where({ id }).delete();
+      return true;
+    });
+  }
+
+  async bulkHardDelete(ids: number[]) {
+    if (!ids.length) return 0;
+    return db.transaction(async (trx) => {
+      await trx('serial_registry').where({ asset_type: this.opts.assetType }).whereIn('asset_id', ids).delete();
+      await trx('asset_assignments').where({ asset_type: this.opts.assetType }).whereIn('asset_id', ids).delete();
+      await trx('pending_approvals').where({ asset_type: this.opts.assetType }).whereIn('asset_id', ids).delete();
+      const n = await trx(this.opts.table).whereIn('id', ids).delete();
+      return n;
+    });
   }
 
   async bulkDelete(ids: number[]) {

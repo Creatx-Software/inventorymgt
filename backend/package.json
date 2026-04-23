@@ -10,7 +10,8 @@
     "migrate:rollback": "knex --knexfile knexfile.ts migrate:rollback",
     "migrate:make": "knex --knexfile knexfile.ts migrate:make",
     "seed": "knex --knexfile knexfile.ts seed:run",
-    "import-excel": "ts-node-dev --transpile-only ../database/import-excel.ts"
+    "import-excel": "ts-node-dev --transpile-only ../database/import-excel.ts",
+    "update-eol": "ts-node --transpile-only src/scripts/update-eol-from-po.ts"
   },
   "dependencies": {
     "@types/multer": "^2.1.0",

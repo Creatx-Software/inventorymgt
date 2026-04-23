@@ -1,10 +1,25 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import type { AssetCommon } from '../../types/assets';
 import { StatusBadge, fmtDate } from './CommonFields';
+import { Clock } from 'lucide-react';
 
 export function commonAssetColumns<T extends AssetCommon>(): ColumnDef<T, any>[] {
   return [
-    { accessorKey: 'serial_number', header: 'Serial', size: 200, cell: (i) => <span className="font-mono text-xs">{i.getValue() as string}</span> },
+    {
+      accessorKey: 'serial_number',
+      header: 'Serial',
+      size: 200,
+      cell: (i) => (
+        <div className="flex items-center gap-1.5">
+          {i.row.original.has_pending_approval ? (
+            <span title="Pending superadmin approval">
+              <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+            </span>
+          ) : null}
+          <span className="font-mono text-xs">{i.getValue() as string}</span>
+        </div>
+      ),
+    },
     { accessorKey: 'asset_name', header: 'Name', size: 180, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'vendor_name', header: 'Vendor', size: 150, enableSorting: false, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'model', header: 'Model', size: 180, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },

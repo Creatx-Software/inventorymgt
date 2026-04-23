@@ -41,9 +41,9 @@ Replace the existing Excel-based asset tracking (`UK & Germany Asset Inventory 2
 inventory-mgt/
 ├── frontend/                 # Vite + React + TS
 │   ├── src/
-│   │   ├── api/              # Axios API clients
+│   │   ├── api/              # Axios API clients (assets.ts, lookups.ts, rbac.ts, etc.)
 │   │   ├── components/
-│   │   │   ├── layout/       # Sidebar, Header, etc.
+│   │   │   ├── layout/       # Sidebar, Header, AppLayout
 │   │   │   ├── table/        # DataTable, filters, column toggles
 │   │   │   ├── forms/        # Reusable form fields
 │   │   │   └── ui/           # Buttons, modals, drawers
@@ -58,18 +58,25 @@ inventory-mgt/
 │   │   │   ├── Printers.tsx
 │   │   │   ├── NetworkDevices.tsx
 │   │   │   ├── OtherAssets.tsx
-│   │   │   ├── NetworkIncidents.tsx
+│   │   │   ├── Incidents.tsx
 │   │   │   ├── Employees.tsx
 │   │   │   ├── Locations.tsx
 │   │   │   ├── Departments.tsx
 │   │   │   ├── Vendors.tsx
-│   │   │   └── Settings.tsx
-│   │   ├── contexts/         # AuthContext
+│   │   │   ├── AuditLogs.tsx
+│   │   │   ├── Settings.tsx
+│   │   │   ├── UsersPage.tsx     # user management (superadmin/admin)
+│   │   │   ├── RolesPage.tsx     # role & permission management
+│   │   │   └── ApprovalsPage.tsx # pending approval review (superadmin only)
+│   │   ├── contexts/         # AuthContext (includes role + permissions)
 │   │   ├── hooks/
 │   │   ├── types/
 │   │   ├── utils/
 │   │   ├── App.tsx
 │   │   └── main.tsx
+│   ├── public/
+│   │   ├── IBN_BIG.svg       # company logo (used in header + login)
+│   │   └── favicon.svg
 │   ├── index.html
 │   ├── vite.config.ts
 │   ├── tailwind.config.js
@@ -79,11 +86,11 @@ inventory-mgt/
 ├── backend/                  # Express + TS
 │   ├── src/
 │   │   ├── config/           # db, env
-│   │   ├── controllers/      # one per asset type + auth, etc.
+│   │   ├── controllers/      # asset.controller, auth, roles, users, incidents, etc.
 │   │   ├── routes/
-│   │   ├── middleware/       # auth, error, audit
+│   │   ├── middleware/       # auth (with requirePermission factory), error
 │   │   ├── services/         # business logic, excel import/export
-│   │   ├── models/           # Knex queries (or repos)
+│   │   ├── models/
 │   │   ├── utils/
 │   │   ├── types/
 │   │   ├── app.ts
@@ -92,12 +99,18 @@ inventory-mgt/
 │   └── package.json
 │
 ├── database/
-│   ├── migrations/           # Knex migration files
-│   ├── seeds/                # Seed data (admin user, statuses, etc.)
-│   ├── schema.sql            # Reference SQL schema
-│   └── import-excel.ts       # One-time migration script for the original .xlsx
+│   ├── migrations/
+│   │   ├── 20240101000000_init_schema.ts   # all base tables
+│   │   ├── 20240102000000_rbac.ts          # roles, role_permissions, users.role_id
+│   │   └── 20240103000000_pending_approvals.ts  # pending_approvals table
+│   ├── seeds/
+│   │   ├── 01_asset_statuses.ts   # idempotent (skips existing rows)
+│   │   ├── 02_admin_user.ts       # seeds default admin
+│   │   └── 03_roles.ts            # seeds superadmin/admin/user roles + permissions
+│   ├── schema.sql
+│   └── import-excel.ts
 │
-├── UK & Germany Asset Inventory 2024 New(1).xlsx   # Source data
+├── UK & Germany Asset Inventory 2024 New(1).xlsx
 └── CLAUDE.md
 ```
 
@@ -114,7 +127,7 @@ inventory-mgt/
 
 ### Lookup / Master Tables
 
-#### `users` (web app login users — admin)
+#### `users` (web app login users)
 | Column | Type | Notes |
 |---|---|---|
 | id | INT PK | |
@@ -122,17 +135,39 @@ inventory-mgt/
 | email | VARCHAR(150) UNIQUE | |
 | password_hash | VARCHAR(255) | bcrypt |
 | full_name | VARCHAR(150) | |
+| role_id | INT FK → roles.id NULL | NULL = treated as basic user |
 | is_active | BOOLEAN | default true |
 | last_login_at | TIMESTAMP NULL | |
 | created_at, updated_at | TIMESTAMP | |
 
-Seeded with one default admin (credentials in `.env`, hashed on first run).
+#### `roles`
+| Column | Type | Notes |
+|---|---|---|
+| id | INT PK | |
+| name | VARCHAR(100) UNIQUE | superadmin, admin, user, or custom |
+| description | TEXT NULL | |
+| is_system | BOOLEAN | true = cannot be edited/deleted |
+| created_at, updated_at | TIMESTAMP | |
+
+System roles seeded: **superadmin** (all permissions), **admin** (all except `roles_manage`), **user** (view-only).
+
+#### `role_permissions`
+| Column | Type | Notes |
+|---|---|---|
+| id | INT PK | |
+| role_id | INT FK → roles.id CASCADE | |
+| permission | VARCHAR(100) | e.g. `endpoints_edit` |
+| UNIQUE(role_id, permission) | | |
+
+Permission key format: `{resource}_{action}` where action is `view`, `create`, `edit`, or `delete`.
+Resources: `dashboard`, `endpoints`, `monitors`, `mobile_devices`, `ip_phones`, `servers`, `printers`, `network_devices`, `other_assets`, `incidents`, `employees`, `departments`, `locations`, `vendors`, `audit_logs`, `consumables`.
+Special: `users_manage`, `roles_manage`.
 
 #### `employees` (asset owners — NOT login users)
 | Column | Type | Notes |
 |---|---|---|
 | id | INT PK | |
-| employee_code | VARCHAR(50) NULL UNIQUE | The "Employee ID" from Excel |
+| employee_code | VARCHAR(50) NULL UNIQUE | Displayed as "Employee ID" in the UI |
 | full_name | VARCHAR(150) | |
 | email | VARCHAR(150) NULL | |
 | department_id | INT FK → departments.id NULL | |
@@ -175,7 +210,7 @@ Seeded with one default admin (credentials in `.env`, hashed on first run).
 | name | VARCHAR(50) UNIQUE | In Use, In Stores, Under Repair, Disposed, Lost, Returned |
 | color | VARCHAR(20) | hex for UI badge |
 
-Seeded.
+Seeded (idempotent — skips rows that already exist).
 
 #### `serial_registry` (enforces global serial uniqueness)
 | Column | Type | Notes |
@@ -185,8 +220,6 @@ Seeded.
 | asset_type | ENUM(...) | endpoint, monitor, mobile, ip_phone, server, printer, network_device, other |
 | asset_id | INT | FK to relevant asset table |
 | created_at | TIMESTAMP | |
-
-When an asset is created/updated/soft-deleted, this table is kept in sync. Provides O(1) global uniqueness check and reverse lookup.
 
 ---
 
@@ -212,11 +245,9 @@ created_at      TIMESTAMP
 updated_at      TIMESTAMP
 ```
 
-Then each asset type adds its own specific columns:
-
-#### `endpoints` (Laptops/Desktops/Scanners)
-+ `endpoint_type` ENUM('Laptop','Desktop','Scanner','Other')
-+ `host_name` VARCHAR(255)
+#### `endpoints` (Laptops/Desktops)
++ `endpoint_type` ENUM('Laptop','Desktop','Other') — **Scanner removed from UI dropdown**
++ `host_name` VARCHAR(255) — **first column in table, sticky, default sort ASC**
 + `asset_code` VARCHAR(100)
 + `mac_address` VARCHAR(50)
 + `os_name_version` VARCHAR(255)
@@ -245,12 +276,12 @@ Then each asset type adds its own specific columns:
 + `server_class` ENUM('Physical','Virtual')
 + `os_name_version` VARCHAR(255)
 + `server_type` ENUM('Web','App','DB','Other')
-+ `server_software` VARCHAR(255)             -- e.g. IIS / WebLogic / Oracle
-+ `managed_by` VARCHAR(100)                  -- IBG / India
++ `server_software` VARCHAR(255)
++ `managed_by` VARCHAR(100)
 + `ip_address` VARCHAR(50)
 + `host_name` VARCHAR(255)
 + `asset_code` VARCHAR(100)
-+ `dc_location` VARCHAR(100)                 -- IBG / HYD DC / JPR DC (also FK to locations)
++ `dc_location` VARCHAR(100)
 + `environment` ENUM('Prod','FB','DR')
 + `is_under_warranty` BOOLEAN
 + `warranty_expiry_date` DATE NULL
@@ -291,11 +322,9 @@ Then each asset type adds its own specific columns:
 | employee_id | INT FK → employees.id | |
 | assigned_date | DATE | |
 | returned_date | DATE NULL | NULL = currently assigned |
-| assigned_by_user_id | INT FK → users.id | which admin made the change |
+| assigned_by_user_id | INT FK → users.id | |
 | notes | TEXT NULL | |
 | created_at | TIMESTAMP | |
-
-When an asset's `employee_id` changes, the system auto-closes the previous assignment row (sets `returned_date`) and inserts a new one.
 
 #### `network_incidents`
 | Column | Type | Notes |
@@ -315,25 +344,68 @@ When an asset's `employee_id` changes, the system auto-closes the previous assig
 | created_at, updated_at | TIMESTAMP | |
 | deleted_at | TIMESTAMP NULL | |
 
-#### `incident_servers` (junction)
-| incident_id INT FK | server_id INT FK | PK(incident_id, server_id) |
-
-#### `incident_network_devices` (junction)
-| incident_id INT FK | network_device_id INT FK | PK(incident_id, network_device_id) |
+#### `incident_servers` / `incident_network_devices` (junction tables)
 
 #### `audit_logs`
 | Column | Type | Notes |
 |---|---|---|
 | id | BIGINT PK | |
-| user_id | INT FK → users.id | who did it |
+| user_id | INT FK → users.id | |
 | action | ENUM('CREATE','UPDATE','DELETE','RESTORE','LOGIN','IMPORT','EXPORT') | |
-| entity_type | VARCHAR(50) | endpoint, server, employee, etc. |
+| entity_type | VARCHAR(50) | |
 | entity_id | INT NULL | |
-| changes | JSON | `{ field: { old, new }, ... }` |
+| changes | JSON | |
 | ip_address | VARCHAR(50) | |
 | created_at | TIMESTAMP | |
 
-Logged via Express middleware on every mutating request.
+#### `consumable_items` (bulk/non-serialised stock catalogue)
+| Column | Type | Notes |
+|---|---|---|
+| id | INT PK | |
+| name | VARCHAR(255) | e.g. "USB-C Cable 1m", "iPhone 14 Back Cover" |
+| category | VARCHAR(100) NULL | Cables, Phone Parts, Accessories, etc. |
+| description | TEXT NULL | |
+| vendor_id | INT FK → vendors.id NULL | |
+| location_id | INT FK → locations.id NULL | Where stock is physically stored |
+| unit | VARCHAR(50) | each, pair, pack, roll — default "each" |
+| current_stock | INT | Live count, updated atomically on every transaction |
+| minimum_stock | INT NULL | Alert threshold for low-stock badge |
+| po_number | VARCHAR(100) NULL | |
+| invoice_number | VARCHAR(100) NULL | |
+| remarks | TEXT NULL | |
+| deleted_at | TIMESTAMP NULL | |
+| created_at, updated_at | TIMESTAMP | |
+
+#### `consumable_transactions` (every stock movement — full audit trail)
+| Column | Type | Notes |
+|---|---|---|
+| id | INT PK | |
+| consumable_item_id | INT FK → consumable_items.id | |
+| transaction_type | ENUM('stock_in','assigned','returned') | stock_in +qty; assigned −qty; returned +qty |
+| quantity | INT UNSIGNED | Always positive |
+| employee_id | INT FK → employees.id NULL | Set for assigned/returned |
+| performed_by_user_id | INT FK → users.id | |
+| transaction_date | DATE | |
+| reference_number | VARCHAR(100) NULL | PO/delivery ref for stock_in |
+| notes | TEXT NULL | |
+| created_at | TIMESTAMP | |
+
+#### `pending_approvals` (admin-edit approval workflow)
+| Column | Type | Notes |
+|---|---|---|
+| id | INT PK | |
+| asset_type | ENUM(...) | endpoint, monitor, mobile_device, etc. |
+| asset_id | INT | FK to relevant asset table |
+| changed_by_user_id | INT FK → users.id | who submitted the change |
+| before_data | JSON | snapshot of asset row before edit |
+| after_data | JSON | snapshot of asset row after edit |
+| status | ENUM('pending','approved','rejected') | default 'pending' |
+| reviewed_by_user_id | INT FK → users.id NULL | superadmin who acted |
+| reviewed_at | TIMESTAMP NULL | |
+| notes | TEXT NULL | rejection reason |
+| created_at | TIMESTAMP | |
+
+One record per asset — if admin edits again while pending, `after_data` is updated but `before_data` is preserved.
 
 ---
 
@@ -343,39 +415,53 @@ All endpoints prefixed with `/api`. All routes (except `/auth/login`) require JW
 
 ### Auth
 ```
-POST   /api/auth/login              # username + password → JWT
+POST   /api/auth/login              # → JWT + user (includes role + permissions)
 POST   /api/auth/logout
-GET    /api/auth/me                 # current user
+GET    /api/auth/me                 # current user with role + permissions
 POST   /api/auth/change-password
+```
+
+### RBAC
+```
+GET    /api/roles                   # list all roles
+GET    /api/roles/:id               # role + permissions array
+POST   /api/roles                   # create custom role (roles_manage)
+PUT    /api/roles/:id               # update role (roles_manage, non-system only)
+DELETE /api/roles/:id               # delete role (roles_manage, non-system only)
+PUT    /api/roles/:id/permissions   # replace full permission set
+
+GET    /api/users                   # list all users with roles (users_manage)
+GET    /api/users/:id
+POST   /api/users                   # create user (users_manage)
+PUT    /api/users/:id               # update user (users_manage)
+PUT    /api/users/:id/toggle-active
 ```
 
 ### Dashboard
 ```
-GET    /api/dashboard/summary       # counts per asset type
-GET    /api/dashboard/warranty      # expired + expiring 30/60/90
+GET    /api/dashboard/summary
+GET    /api/dashboard/warranty
 GET    /api/dashboard/recent-activity
-GET    /api/dashboard/charts        # by location, by status
+GET    /api/dashboard/charts
 ```
 
 ### Asset Endpoints (one set per asset type)
 For each of: `endpoints`, `monitors`, `mobile-devices`, `ip-phones`, `servers`, `printers`, `network-devices`, `other-assets`:
-
 ```
-GET    /api/{type}                  # list with pagination, filters, sort
-GET    /api/{type}/:id               # single
-POST   /api/{type}                   # create
-PUT    /api/{type}/:id               # update
-DELETE /api/{type}/:id               # soft delete
-POST   /api/{type}/:id/restore       # undelete
-POST   /api/{type}/bulk-delete       # multiple ids
-GET    /api/{type}/export            # CSV / XLSX of current filter
-POST   /api/{type}/import            # smart Excel import (column mapping)
-GET    /api/{type}/template          # download Excel template
-GET    /api/{type}/:id/history       # assignment history
+GET    /api/{type}
+GET    /api/{type}/:id
+POST   /api/{type}
+PUT    /api/{type}/:id
+DELETE /api/{type}/:id
+POST   /api/{type}/:id/restore
+POST   /api/{type}/bulk-delete
+GET    /api/{type}/export
+POST   /api/{type}/import
+GET    /api/{type}/template
+GET    /api/{type}/:id/history
 ```
 
-**List query params:**
-`?page=1&pageSize=100&search=&sortBy=&sortDir=&filters[field]=value&includeDeleted=false`
+**List query params:** `?page=1&pageSize=100&search=&sortBy=&sortDir=&filters[field]=value&includeDeleted=false`
 
 ### Lookups
 ```
@@ -388,111 +474,132 @@ GET                  /api/asset-statuses
 
 ### Network Incidents
 ```
-GET    /api/incidents
-POST   /api/incidents
-PUT    /api/incidents/:id
-DELETE /api/incidents/:id
-GET    /api/incidents/:id           # includes linked servers + network devices
+GET/POST/PUT/DELETE  /api/incidents
+GET                  /api/incidents/:id
 ```
 
 ### Audit
 ```
-GET    /api/audit-logs              # paginated, filter by user/entity/date
+GET    /api/audit-logs
+```
+
+### Consumables
+```
+GET    /api/consumables                      # list (page, search, sortBy, sortDir, category, includeDeleted)
+GET    /api/consumables/:id                  # single item
+POST   /api/consumables                      # create
+PUT    /api/consumables/:id                  # update
+DELETE /api/consumables/:id                  # soft delete
+POST   /api/consumables/:id/restore
+POST   /api/consumables/:id/stock-in         # { quantity, transaction_date, reference_number?, notes? }
+POST   /api/consumables/:id/assign           # { quantity, employee_id, transaction_date, notes? } — decrements stock
+POST   /api/consumables/:id/return           # { quantity, employee_id, transaction_date, notes? } — increments stock
+GET    /api/consumables/:id/transactions     # full movement log DESC
+GET    /api/consumables/:id/assignments      # net qty per employee (only those with net_quantity > 0)
+GET    /api/consumables/meta/categories      # distinct category values
+```
+
+### Approvals
+```
+GET    /api/approvals              # list pending approvals (superadmin only); ?assetType= filter
+GET    /api/approvals/:id          # single approval with parsed JSON
+POST   /api/approvals/:id/approve  # approve — marks record approved (superadmin only)
+POST   /api/approvals/:id/reject   # reject — restores before_data to asset (superadmin only)
 ```
 
 ---
 
 ## Frontend Pages
 
-| Route | Page | Description |
+| Route | Page | Access |
 |---|---|---|
-| `/login` | Login | username + password |
-| `/` | Dashboard | summary cards, warranty alerts, charts |
-| `/endpoints` | Endpoints | data table |
-| `/monitors` | Monitors | data table |
-| `/mobile-devices` | Mobile Devices | data table |
-| `/ip-phones` | IP Phones | data table |
-| `/servers` | Servers | data table |
-| `/printers` | Printers | data table |
-| `/network-devices` | Network Devices | data table |
-| `/other-assets` | Other Assets | data table |
-| `/incidents` | Network Incidents | list + create/edit |
-| `/employees` | Employees | master list |
-| `/departments` | Departments | master list |
-| `/locations` | Locations | master list |
-| `/vendors` | Vendors | master list |
-| `/audit-logs` | Audit Trail | filterable log |
-| `/settings` | Settings | change password, app config |
+| `/login` | Login | Public |
+| `/` | Dashboard | `dashboard_view` |
+| `/endpoints` | Endpoints | `endpoints_view` |
+| `/monitors` | Monitors | `monitors_view` |
+| `/mobile-devices` | Mobile Devices | `mobile_devices_view` |
+| `/ip-phones` | IP Phones | `ip_phones_view` |
+| `/servers` | Servers | `servers_view` |
+| `/printers` | Printers | `printers_view` |
+| `/network-devices` | Network Devices | `network_devices_view` |
+| `/other-assets` | Other Assets | `other_assets_view` |
+| `/incidents` | Network Incidents | `incidents_view` |
+| `/employees` | Employees | `employees_view` |
+| `/departments` | Departments | `departments_view` |
+| `/locations` | Locations | `locations_view` |
+| `/vendors` | Vendors | `vendors_view` |
+| `/audit-logs` | Audit Trail | `audit_logs_view` |
+| `/settings` | Settings | All users |
+| `/users` | User Management | `users_manage` or superadmin |
+| `/roles` | Roles & Permissions | `roles_manage` or superadmin |
+| `/approvals` | Pending Approvals | superadmin only |
+| `/consumables` | Consumable Stock | `consumables_view` |
+
+Sidebar items are filtered automatically based on the logged-in user's permissions.
 
 ---
 
-## Data Table Standard (the core UX)
+## RBAC System
 
-Every asset page uses the **same** data table component with these features:
+### User Types
+| Role | Description |
+|---|---|
+| **superadmin** | Full access. Can manage roles, users, and all assets. Cannot be deleted or edited. |
+| **admin** | All permissions except `roles_manage`. Can manage users. |
+| **user** | View-only access to all resources. |
+| **custom** | Any role created by superadmin/admin with a specific permission set. |
 
-- **All columns visible** with horizontal scroll
-- **Sticky header row** + **sticky first 2 columns** (Serial + Asset Name)
-- **Compact rows** (~30px high) — Excel-like density
-- **Default page size: 100**, options: 25 / 50 / 100 / 200 / All
-- **Inline editing** — double-click any cell to edit, Enter to save, Esc to cancel
-- **Quick add row** at the top of the table
-- **Per-column filters** in headers (text search, dropdown for FKs, date range for dates)
-- **Global search bar** across all columns
-- **Multi-column sort**
-- **Column show/hide toggle** with **saved views** per asset type
-- **Bulk select** → bulk delete / bulk export
-- **Right-side detail drawer** — click row to see all fields + edit form
-- **Keyboard shortcuts:** Tab/Shift+Tab navigate cells, Enter save, Esc cancel, Ctrl+S save row, `/` focus search
-- **Export:** CSV + XLSX of current filtered view
-- **Import:** Smart Excel import with column-mapping UI
+### AuthContext
+`useAuth()` exposes:
+- `user` — includes `role` and `permissions[]`
+- `hasPermission(key: string)` — returns true if superadmin or permission is in list
+- `isSuperAdmin()` — returns true if role === 'superadmin'
 
-Built with **TanStack Table v8**.
+### Backend Permission Guard
+`requirePermission('key')` middleware factory. Superadmins bypass all checks.
 
 ---
 
-## Excel Import (Smart Mapping)
+## Authentication & Session
 
-The Excel import is **smart**, not strict:
-
-1. User uploads `.xlsx` file
-2. App reads first sheet, shows preview of first 10 rows
-3. App displays a **mapping screen**: each Excel column → dropdown of target DB column
-4. App auto-suggests mappings based on header similarity (e.g., "Make" → `vendor`, "Branch" → `location`)
-5. User confirms / adjusts mapping
-6. App validates rows:
-   - Missing serial → auto-fill `N/A-{type}-{auto#}`
-   - Unknown vendor/location/department/employee → **auto-create** lookup row
-   - Employee without ID → match by name; if multiple matches, flag for review
-7. Import runs in a transaction with a **dry-run preview** first (X to insert, Y to update, Z errors)
-8. User confirms → import executes, results logged in `audit_logs` and shown in summary
-
-The same engine powers `database/import-excel.ts` (the one-time migration script).
-
----
-
-## Authentication
-
-- Single admin role for now (room to expand later)
 - Passwords hashed with bcrypt (10 rounds)
-- JWT tokens (7-day expiry) stored in `localStorage`
-- Auth middleware validates JWT on every protected route
-- One default admin seeded on first run from `.env`:
+- JWT tokens — **12-hour expiry** stored in `localStorage`
+- **Auto-logout** after 12 hours: `loginAt` timestamp stored on login; `setTimeout` fires logout at the 12-hour mark; expired sessions cleared on page reload
+- Auth middleware loads user's role + permissions from DB on every request
+- Login/me responses include `role` and `permissions[]`
+- One default admin seeded on first run (promoted to superadmin by seed `03_roles`):
   ```
   DEFAULT_ADMIN_USERNAME=admin
   DEFAULT_ADMIN_EMAIL=admin@example.com
   DEFAULT_ADMIN_PASSWORD=ChangeMe123!
   ```
-- Login screen at `/login`; password change in `/settings`
 
 ---
 
 ## Soft Delete
 
 - All asset and lookup tables have `deleted_at TIMESTAMP NULL`
-- Default list queries exclude rows where `deleted_at IS NOT NULL`
-- "Show deleted" toggle in UI (admin only) allows viewing soft-deleted rows
-- Restore endpoint sets `deleted_at = NULL`
+- Default list queries exclude soft-deleted rows
+- "Show deleted" toggle in UI allows viewing them
 - Hard delete is **never** exposed via the API
+
+---
+
+## Endpoints Table — Special Behaviour
+
+- **Host** is the **first column** and the **sticky column** (fixed when scrolling horizontally)
+- Default sort: **Host name A → Z**
+- Status column is **sortable** (sorts by status name via `asset_statuses.name`)
+- `endpoint_type` options: Laptop, Desktop, Other — **Scanner is not offered in the UI** (DB ENUM still includes it for existing records)
+- **EOL auto-calculate**: PO number format `PO/ICICIUK/DD/MM/YYYY/suffix` — the date is extracted and EOL = purchase date + 5 years. Shown as a suggestion in the edit drawer. Script `npm run update-eol` bulk-updates all existing records.
+
+---
+
+## UI Conventions
+
+- **IBN_BIG.svg** (from `/public`) is displayed in the Header (left side) and on the Login screen
+- Login screen footer: "Design & Developed by: creatxsoftware.com" (opens in new tab)
+- `employee_code` column is labelled **"Employee ID"** everywhere in the UI (field name unchanged in DB/API)
 
 ---
 
@@ -502,24 +609,10 @@ The same engine powers `database/import-excel.ts` (the one-time migration script
 - Total Endpoints, Monitors, Mobile Devices, IP Phones, Servers, Printers, Network Devices, Other Assets
 
 ### Warranty alerts (with color coding)
-- 🔴 **Expired** (warranty_expiry_date < today)
-- 🟠 **Expiring in 30 days**
-- 🟡 **Expiring in 60 days**
-- 🟢 **Expiring in 90 days**
-
-Same logic for `eol_date` (EOS/EOL alerts).
-
-### Recent Activity
-- Last 10 entries from `audit_logs`
-
-### Unassigned Assets
-- Count of assets where `employee_id IS NULL` and `status = 'In Use'`
+- Expired, expiring in 30 / 60 / 90 days — same logic for `eol_date`
 
 ### Charts
-- Assets by location (bar)
-- Assets by status (pie)
-- Assets by department (bar)
-- Assets by vendor (bar, top 10)
+- Assets by location (bar), by status (pie), by department (bar), by vendor (bar, top 10)
 
 ---
 
@@ -531,23 +624,19 @@ NODE_ENV=development
 PORT=5000
 API_PREFIX=/api
 
-# Database
 DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=
 DB_NAME=inventory_mgt
 
-# JWT
 JWT_SECRET=change_me_to_a_long_random_string
-JWT_EXPIRES_IN=7d
+JWT_EXPIRES_IN=12h
 
-# Default admin (seeded on first run)
 DEFAULT_ADMIN_USERNAME=admin
 DEFAULT_ADMIN_EMAIL=admin@example.com
 DEFAULT_ADMIN_PASSWORD=ChangeMe123!
 
-# CORS
 CORS_ORIGIN=http://localhost:5173
 ```
 
@@ -567,10 +656,11 @@ npm install
 npm run dev               # nodemon + ts-node, port 5000
 npm run build
 npm start
-npm run migrate           # knex migrate:latest
+npm run migrate           # knex migrate:latest (run after pulling new migrations)
 npm run migrate:rollback
-npm run seed              # seed lookups + admin user
+npm run seed              # idempotent — safe to re-run
 npm run import-excel      # one-time migration of the source xlsx
+npm run update-eol        # one-time: calculate eol_date from po_number for all endpoints (PO date + 5 years)
 
 # Frontend
 cd frontend
@@ -580,57 +670,83 @@ npm run build
 npm run preview
 ```
 
+### First-time setup order
+```bash
+cd backend
+npm run migrate    # creates all tables including roles/role_permissions
+npm run seed       # seeds statuses + admin user + roles
+npm run dev
+```
+
 ---
 
 ## Build Phases
 
-### Phase 1 — Foundation
-1. Initialize `frontend/`, `backend/`, `database/` with TypeScript and dependencies
-2. MySQL connection + Knex setup
-3. Migrations for **all** tables (lookups + assets + supporting)
-4. Seed asset_statuses, default admin
-5. Auth: login endpoint, JWT middleware, login page, AuthContext
+### Phase 1 — Foundation ✅
+- DB, migrations, seeds, auth (JWT), login page, AuthContext
 
-### Phase 2 — Lookups
-6. CRUD APIs and pages for: vendors, locations, departments, employees
-7. Reusable `DataTable` component (TanStack Table) with all features
+### Phase 2 — Lookups ✅
+- CRUD for vendors, locations, departments, employees
+- Reusable DataTable component
 
-### Phase 3 — Asset Tables (one type at a time)
-8. Endpoints (CRUD + table page + detail drawer + assignment history)
-9. Repeat for: Monitors, Mobile Devices, IP Phones, Printers, Network Devices, Other Assets, Servers
+### Phase 3 — Asset Tables ✅
+- All 8 asset types with CRUD, table pages, detail drawers, assignment history
 
-### Phase 4 — Excel Migration & Import
-10. `database/import-excel.ts` — one-time migration script for the source xlsx
-11. Smart Excel import UI (column mapping, dry-run preview)
-12. Excel/CSV export per asset type
+### Phase 4 — Excel Migration & Import ✅
+- One-time import script
+- Smart Excel import UI (column mapping, dry-run)
 
-### Phase 5 — Incidents & Audit
-13. Network Incidents CRUD + linking to servers/devices
-14. Audit log middleware + audit log page
+### Phase 5 — Incidents & Audit ✅
+- Network Incidents CRUD
+- Audit log middleware + page
 
-### Phase 6 — Dashboard
-15. Summary cards, warranty alerts, charts, recent activity
+### Phase 6 — Dashboard ✅
+- Summary cards, warranty alerts, charts, recent activity
 
-### Phase 7 — Polish
-16. Keyboard shortcuts, saved views, column toggles
-17. Soft-delete restore UI, bulk operations
-18. Settings page (change password)
+### Phase 7 — RBAC ✅
+- Roles table, role_permissions, users.role_id migration
+- Superadmin / admin / user system roles seeded
+- Permission-gated sidebar, API guards, Users page, Roles & Permissions page
+
+### Phase 8 — Approval Workflow ✅
+- Non-superadmin edits create a `pending_approvals` record with before/after JSON snapshots
+- Asset rows with pending approvals show an amber clock icon on the serial number column
+- `/approvals` page (superadmin only): asset type filter bar, pending items list
+- Review drawer: shows all fields, changed fields highlighted red/green at top
+- Approve action: marks record approved, asset retains the edit
+- Reject action: restores `before_data` to the asset table, marks record rejected
+
+### Phase 9 — Polish (in progress)
+- Keyboard shortcuts, saved views, column toggles
+- Soft-delete restore UI, bulk operations
+
+### Phase 10 — Consumable Stock ✅
+- Non-serialised bulk items (cables, back covers, adapters, etc.) tracked by quantity
+- Two new tables: `consumable_items` (catalogue) + `consumable_transactions` (every movement)
+- Three transaction types: `stock_in` (restock), `assigned` (to employee, decrements stock), `returned` (from employee, increments stock)
+- Stock count is live in `consumable_items.current_stock`, updated atomically in a DB transaction
+- Low-stock badge (amber) when `current_stock <= minimum_stock`; out-of-stock badge (red) when 0
+- Per-row action buttons: Add Stock, Assign to Employee, Return from Employee
+- Transaction History drawer: full movement log + "Current Holders" tab (net qty per employee)
+- Category filter tabs (derived from distinct categories in the table)
+- Permission resource: `consumables` — view/create/edit/delete; seeded for all system roles via migration `20240104000001`
+- Route: `/consumables`; sidebar item under Assets section
 
 ---
 
 ## Notes & Constraints
 
-- **Local only** — runs on developer machine. CORS limited to `localhost:5173`.
-- **English only**, **GBP (£)** currency.
-- **Date format:** DD/MM/YYYY in UI; ISO `YYYY-MM-DD` in API/DB.
-- **Serial numbers**: globally unique. Missing serials auto-filled as `N/A-{type}-{n}`.
-- **Soft delete only** — no hard deletes via API.
-- **No file uploads** in v1 (planned for later: warranty PDFs, invoice scans, asset photos).
-- **No email notifications** in v1 (warranty alerts shown on dashboard only).
-- **No barcode/QR scanning** in v1.
-- **No multi-tenancy** — single company.
-- **Mobile Devices Old** sheet from the source xlsx is ignored (not migrated).
-- **"Department 1"** column from the Endpoints sheet is ignored.
+- **Local only** — CORS limited to `localhost:5173`
+- **English only**, **GBP (£)** currency
+- **Date format:** DD/MM/YYYY in UI; ISO `YYYY-MM-DD` in API/DB
+- **Serial numbers**: globally unique; missing serials auto-filled as `N/A-{type}-{n}`
+- **Soft delete only** — no hard deletes via API
+- **No file uploads** in v1
+- **No email notifications** in v1
+- **No barcode/QR scanning** in v1
+- **No multi-tenancy** — single company
+- **Mobile Devices Old** sheet from source xlsx is ignored
+- **"Department 1"** column from Endpoints sheet is ignored
 
 ---
 

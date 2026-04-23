@@ -103,19 +103,16 @@ export default function AuditLogsPage() {
               )}
               {data.map((log) => (
                 <tr key={log.id} onClick={() => setSelected(log)} className="border-b border-slate-100 hover:bg-brand-50/40 cursor-pointer">
-                  <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{new Date(log.created_at).toLocaleString('en-GB')}</td>
-                  <td className="px-3 py-2">
-                    <div className="font-medium text-slate-900">{log.user_full_name || log.username || 'System'}</div>
-                    {log.username && <div className="text-xs text-slate-500">{log.username}</div>}
-                  </td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-1.5 text-xs text-slate-600 whitespace-nowrap">{new Date(log.created_at).toLocaleString('en-GB')}</td>
+                  <td className="px-3 py-1.5 text-xs text-slate-900 whitespace-nowrap">{log.user_full_name || log.username || 'System'}</td>
+                  <td className="px-3 py-1.5">
                     <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full border ${actionColor[log.action] || 'bg-slate-50 text-slate-700 border-slate-200'}`}>
                       {log.action}
                     </span>
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-600">{log.entity_type}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-600">{log.entity_id ?? '—'}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-500">{log.ip_address || '—'}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{log.entity_type}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{log.entity_id ?? '—'}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{log.ip_address || '—'}</td>
                 </tr>
               ))}
             </tbody>

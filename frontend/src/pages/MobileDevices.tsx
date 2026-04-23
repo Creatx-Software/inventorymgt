@@ -43,7 +43,7 @@ export default function MobileDevicesPage() {
         imei_number: r.imei_number || '',
         production_year: r.production_year ? String(r.production_year) : '',
       })}
-      renderExtraFields={(extra, set) => (
+      renderExtraFields={(extra, set, _common) => (
         <div className="grid grid-cols-2 gap-4">
           <div><label className="label">EID</label><input className="input font-mono" value={extra.eid} onChange={(e) => set({ ...extra, eid: e.target.value })} /></div>
           <div><label className="label">Mobile Number</label><input className="input font-mono" value={extra.mobile_number} onChange={(e) => set({ ...extra, mobile_number: e.target.value })} /></div>

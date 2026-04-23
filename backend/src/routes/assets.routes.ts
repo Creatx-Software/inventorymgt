@@ -14,9 +14,9 @@ export const endpointsRouter = buildAssetRouter({
   table: 'endpoints',
   assetType: 'endpoint',
   searchableColumns: [...commonSearch, 'host_name', 'asset_code', 'mac_address', 'ip_address', 'os_name_version'],
-  allowedSortColumns: [...commonSort, 'endpoint_type', 'host_name', 'warranty_expiry_date', 'eol_date'],
+  allowedSortColumns: [...commonSort, 'endpoint_type', 'host_name', 'warranty_expiry_date', 'eol_date', 'status_name'],
   allowedFilterColumns: [...commonFilter, 'endpoint_type', 'host_name', 'asset_code', 'ip_address'],
-  defaultSort: { column: 'created_at', dir: 'desc' },
+  defaultSort: { column: 'host_name', dir: 'asc' },
 });
 
 export const monitorsRouter = buildAssetRouter({

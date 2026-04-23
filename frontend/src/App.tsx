@@ -18,6 +18,11 @@ import OtherAssets from './pages/OtherAssets';
 import Incidents from './pages/Incidents';
 import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
+import UsersPage from './pages/UsersPage';
+import RolesPage from './pages/RolesPage';
+import ApprovalsPage from './pages/ApprovalsPage';
+import WarrantyPage from './pages/WarrantyPage';
+import ConsumableStock from './pages/ConsumableStock';
 
 export default function App() {
   return (
@@ -42,6 +47,11 @@ export default function App() {
             <Route path="/locations"       element={<Locations />} />
             <Route path="/vendors"         element={<Vendors />} />
             <Route path="/settings"        element={<Settings />} />
+            <Route path="/users"           element={<UsersPage />} />
+            <Route path="/roles"           element={<RolesPage />} />
+            <Route path="/approvals"       element={<ApprovalsPage />} />
+            <Route path="/warranty"          element={<WarrantyPage />} />
+            <Route path="/consumables"       element={<ConsumableStock />} />
           </Route>
         </Routes>
       </BrowserRouter>

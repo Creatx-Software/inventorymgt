@@ -14,11 +14,18 @@ import { incidentsRouter } from './controllers/incidents.controller';
 import { auditRouter } from './controllers/audit.controller';
 import { dashboardRouter } from './controllers/dashboard.controller';
 import { employeeAssetsRouter } from './controllers/employee-assets.controller';
+import { rolesRouter } from './controllers/roles.controller';
+import { usersRouter } from './controllers/users.controller';
+import { approvalsRouter } from './controllers/approvals.controller';
+import { consumablesRouter } from './controllers/consumables.controller';
 import { notFound, errorHandler } from './middleware/error';
 
 const app = express();
 
-app.use(cors({ origin: env.corsOrigin, credentials: true }));
+app.use(cors({
+  origin: env.corsOrigin === '*' ? true : env.corsOrigin,
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -44,6 +51,10 @@ app.use(`${env.apiPrefix}/incidents`, incidentsRouter);
 app.use(`${env.apiPrefix}/audit-logs`, auditRouter);
 app.use(`${env.apiPrefix}/dashboard`, dashboardRouter);
 app.use(`${env.apiPrefix}/employees`, employeeAssetsRouter);
+app.use(`${env.apiPrefix}/roles`, rolesRouter);
+app.use(`${env.apiPrefix}/users`, usersRouter);
+app.use(`${env.apiPrefix}/approvals`, approvalsRouter);
+app.use(`${env.apiPrefix}/consumables`, consumablesRouter);
 
 app.use(notFound);
 app.use(errorHandler);

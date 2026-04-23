@@ -106,8 +106,13 @@ export default function Dashboard() {
               <h2 className="text-lg font-semibold text-slate-900">Warranty Alerts</h2>
               <p className="text-xs text-slate-500 mt-0.5">Assets with expired or expiring warranty</p>
             </div>
-            <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-amber-600" />
+            <div className="flex items-center gap-2">
+              <Link to="/warranty" className="text-xs text-brand-600 hover:underline flex items-center gap-1">
+                View all <ArrowRight className="w-3 h-3" />
+              </Link>
+              <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
             </div>
           </div>
 
@@ -205,7 +210,7 @@ export default function Dashboard() {
           ) : <EmptyChart />}
         </ChartCard>
 
-        <ChartCard title="Top Locations" subtitle="Assets per office / data centre">
+        <ChartCard title="Locations" subtitle="Assets per office / data centre">
           {charts && charts.byLocation.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={charts.byLocation} layout="vertical" margin={{ left: 10, right: 20 }}>
@@ -219,7 +224,7 @@ export default function Dashboard() {
           ) : <EmptyChart />}
         </ChartCard>
 
-        <ChartCard title="Top Vendors" subtitle="Most used manufacturers">
+        <ChartCard title="Vendors" subtitle="Most used manufacturers">
           {charts && charts.byVendor.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={charts.byVendor} margin={{ left: 0, right: 20 }}>
@@ -233,7 +238,7 @@ export default function Dashboard() {
           ) : <EmptyChart />}
         </ChartCard>
 
-        <ChartCard title="Top Departments" subtitle="Assets owned by department">
+        <ChartCard title="Departments" subtitle="Assets owned by department">
           {charts && charts.byDepartment.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={charts.byDepartment} layout="vertical" margin={{ left: 10, right: 20 }}>

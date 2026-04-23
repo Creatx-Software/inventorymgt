@@ -28,5 +28,10 @@ export function createCrudApi<T extends { id: number }>(resource: string) {
     restore: async (id: number): Promise<void> => {
       await api.post(`/${resource}/${id}/restore`);
     },
+    hardDelete: async (id: number): Promise<void> => {
+      await api.delete(`/${resource}/${id}/permanent`);
+    },
+    bulkHardDelete: async (ids: number[]): Promise<{ deleted: number }> =>
+      (await api.post(`/${resource}/bulk-permanent-delete`, { ids })).data,
   };
 }

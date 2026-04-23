@@ -6,7 +6,7 @@ export const env = {
   port: Number(process.env.PORT || 5000),
   apiPrefix: process.env.API_PREFIX || '/api',
   jwtSecret: process.env.JWT_SECRET || 'dev_secret_change_me',
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '12h',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   defaultAdmin: {
     username: process.env.DEFAULT_ADMIN_USERNAME || 'admin',

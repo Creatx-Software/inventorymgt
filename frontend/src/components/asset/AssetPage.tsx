@@ -9,6 +9,7 @@ import type { Vendor, Location, Department, Employee, ListParams, PaginatedRespo
 import type { AssetStatus, AssignmentHistory, AssetCommon } from '../../types/assets';
 import { History, Loader2, Upload } from 'lucide-react';
 import { ImportModal } from '../import/ImportModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 export interface AssetCrudApi<T> {
   list: (p: ListParams) => Promise<PaginatedResponse<T>>;
@@ -17,6 +18,8 @@ export interface AssetCrudApi<T> {
   remove: (id: number) => Promise<void>;
   bulkDelete: (ids: number[]) => Promise<{ deleted: number }>;
   restore: (id: number) => Promise<void>;
+  hardDelete: (id: number) => Promise<void>;
+  bulkHardDelete: (ids: number[]) => Promise<{ deleted: number }>;
 }
 
 export interface AssetPageProps<T extends AssetCommon, ExtraForm extends Record<string, any>> {
@@ -30,13 +33,20 @@ export interface AssetPageProps<T extends AssetCommon, ExtraForm extends Record<
   emptyExtra: ExtraForm;
   extraToPayload: (extra: ExtraForm) => Record<string, any>;
   rowToExtra: (row: T) => ExtraForm;
-  renderExtraFields: (extra: ExtraForm, setExtra: (e: ExtraForm) => void) => ReactNode;
+  renderExtraFields: (extra: ExtraForm, setExtra: (e: ExtraForm) => void, common: CommonFormState) => ReactNode;
+  defaultSorting?: { id: string; desc: boolean }[];
 }
 
 export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string, any>>({
   title, subtitle, resource, assetType, api, columns, stickyColumnIds,
-  emptyExtra, extraToPayload, rowToExtra, renderExtraFields,
+  emptyExtra, extraToPayload, rowToExtra, renderExtraFields, defaultSorting,
 }: AssetPageProps<T, ExtraForm>) {
+  const { hasPermission } = useAuth();
+  const perm = `${assetType}s`; // e.g. 'endpoint' → 'endpoints'
+  const canCreate = hasPermission(`${perm}_create`);
+  const canEdit   = hasPermission(`${perm}_edit`);
+  const canDelete = hasPermission(`${perm}_delete`);
+
   const [importOpen, setImportOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<T | null>(null);
@@ -129,16 +139,21 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
         subtitle={subtitle}
         columns={columns}
         fetcher={fetcher}
-        onCreate={openNew}
+        onCreate={canCreate ? openNew : undefined}
         onRowClick={openEdit}
-        onBulkDelete={async (ids) => { await api.bulkDelete(ids); setReloadKey((k) => k + 1); }}
-        onRestore={async (id) => { await api.restore(id); setReloadKey((k) => k + 1); }}
+        onBulkDelete={canDelete ? async (ids) => { await api.bulkDelete(ids); setReloadKey((k) => k + 1); } : undefined}
+        onRestore={canEdit ? async (id) => { await api.restore(id); setReloadKey((k) => k + 1); } : undefined}
+        onHardDelete={canDelete ? async (id) => { await api.hardDelete(id); setReloadKey((k) => k + 1); } : undefined}
+        onBulkHardDelete={canDelete ? async (ids) => { await api.bulkHardDelete(ids); setReloadKey((k) => k + 1); } : undefined}
         stickyColumnIds={stickyColumnIds}
         viewKey={`asset-${assetType}`}
+        defaultSorting={defaultSorting}
         extraActions={
-          <button onClick={() => setImportOpen(true)} className="btn-secondary">
-            <Upload className="w-4 h-4" /> Import
-          </button>
+          canCreate ? (
+            <button onClick={() => setImportOpen(true)} className="btn-secondary">
+              <Upload className="w-4 h-4" /> Import
+            </button>
+          ) : undefined
         }
       />
 
@@ -158,14 +173,16 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
         width="lg"
         footer={
           <div className="flex justify-between">
-            <div>{editing && (
+            <div>{editing && canDelete && (
               <button onClick={remove} className="btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Delete</button>
             )}</div>
             <div className="flex gap-2">
               <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
-              <button onClick={save} disabled={saving || !common.status_id} className="btn-primary">
-                {saving ? 'Saving...' : 'Save'}
-              </button>
+              {(editing ? canEdit : canCreate) && (
+                <button onClick={save} disabled={saving || !common.status_id} className="btn-primary">
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              )}
             </div>
           </div>
         }
@@ -200,7 +217,7 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
             />
             <div className="border-t border-slate-200 pt-5">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Type-Specific Details</div>
-              {renderExtraFields(extra, setExtra)}
+              {renderExtraFields(extra, setExtra, common)}
             </div>
           </div>
         )}

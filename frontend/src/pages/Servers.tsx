@@ -112,7 +112,7 @@ export default function ServersPage() {
         patching_status: r.patching_status,
         exception_memo_no: r.exception_memo_no || '',
       })}
-      renderExtraFields={(extra, set) => (
+      renderExtraFields={(extra, set, _common) => (
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2"><label className="label">Application Name</label><input className="input" value={extra.application_name} onChange={(e) => set({ ...extra, application_name: e.target.value })} /></div>
           <div><label className="label">CAN ID</label><input className="input" value={extra.can_id} onChange={(e) => set({ ...extra, can_id: e.target.value })} /></div>

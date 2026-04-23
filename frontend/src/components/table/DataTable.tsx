@@ -24,21 +24,27 @@ export interface DataTableProps<T extends { id: number }> {
   onCreate?: () => void;
   onBulkDelete?: (ids: number[]) => Promise<void>;
   onRestore?: (id: number) => Promise<void>;
+  onHardDelete?: (id: number) => Promise<void>;
+  onBulkHardDelete?: (ids: number[]) => Promise<void>;
   pageSizes?: number[];
   defaultPageSize?: number;
   stickyColumnIds?: string[];
   extraActions?: React.ReactNode | ((ctx: { selectedIds: number[] }) => React.ReactNode);
   /** Unique key used to persist column visibility + pageSize in localStorage */
   viewKey?: string;
+  /** Initial sort state — column id + direction */
+  defaultSorting?: { id: string; desc: boolean }[];
 }
 
 export function DataTable<T extends { id: number; deleted_at?: string | null }>({
   title, subtitle, columns, fetcher, onRowClick, onCreate, onBulkDelete, onRestore,
+  onHardDelete, onBulkHardDelete,
   pageSizes = [25, 50, 100, 200, 500],
   defaultPageSize = 100,
   stickyColumnIds = [],
   extraActions,
   viewKey,
+  defaultSorting = [],
 }: DataTableProps<T>) {
   const storageKey = viewKey ? `dt:${viewKey}` : null;
   const loadPersisted = () => {
@@ -60,7 +66,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
   const [pageSize, setPageSize] = useState<number>(persisted.pageSize);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>(defaultSorting);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(persisted.visibility);
   const [showColMenu, setShowColMenu] = useState(false);
@@ -164,11 +170,27 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
     load();
   };
 
+  const handleBulkHardDelete = async () => {
+    if (!onBulkHardDelete || !hasSelection) return;
+    if (!confirm(`Permanently delete ${selectedIds.length} selected item(s)? This cannot be undone.`)) return;
+    await onBulkHardDelete(selectedIds);
+    setRowSelection({});
+    load();
+  };
+
   const handleRestore = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!onRestore) return;
     if (!confirm('Restore this item?')) return;
     await onRestore(id);
+    load();
+  };
+
+  const handleHardDelete = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onHardDelete) return;
+    if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+    await onHardDelete(id);
     load();
   };
 
@@ -214,7 +236,12 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
           {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
         </div>
         <div className="flex items-center gap-2">
-          {hasSelection && onBulkDelete && (
+          {hasSelection && showDeleted && onBulkHardDelete && (
+            <button onClick={handleBulkHardDelete} className="btn bg-red-600 text-white border border-red-700 hover:bg-red-700">
+              <Trash2 className="w-4 h-4" /> Delete Permanently ({selectedIds.length})
+            </button>
+          )}
+          {hasSelection && !showDeleted && onBulkDelete && (
             <button onClick={handleBulkDelete} className="btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">
               <Trash2 className="w-4 h-4" /> Delete ({selectedIds.length})
             </button>
@@ -347,15 +374,28 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
                         </td>
                       );
                     })}
-                    {showDeleted && onRestore && (
+                    {showDeleted && (onRestore || onHardDelete) && (
                       <td className="px-3 py-2">
                         {isDeleted && (
-                          <button
-                            onClick={(e) => handleRestore(row.original.id, e)}
-                            className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 py-1 px-2 text-xs"
-                          >
-                            <RotateCcw className="w-3 h-3" /> Restore
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {onRestore && (
+                              <button
+                                onClick={(e) => handleRestore(row.original.id, e)}
+                                className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 py-1 px-2 text-xs"
+                              >
+                                <RotateCcw className="w-3 h-3" /> Restore
+                              </button>
+                            )}
+                            {onHardDelete && (
+                              <button
+                                onClick={(e) => handleHardDelete(row.original.id, e)}
+                                className="btn bg-red-600 text-white border border-red-700 hover:bg-red-700 py-1 px-2 text-xs"
+                                title="Delete permanently — cannot be undone"
+                              >
+                                <Trash2 className="w-3 h-3" /> Delete
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     )}
