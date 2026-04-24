@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Lock, User2, Loader2 } from 'lucide-react';
 
 export default function Login() {
+  useEffect(() => { document.title = 'Login — ICICI Inventory'; }, []);
   const { user, login } = useAuth();
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
