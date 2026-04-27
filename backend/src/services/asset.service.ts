@@ -76,6 +76,8 @@ export class AssetService {
           });
           sub.orWhere('vendors.name', 'like', term);
           sub.orWhere('employees.full_name', 'like', term);
+          sub.orWhere('locations.name', 'like', term);
+          sub.orWhere('departments.name', 'like', term);
         });
       }
       if (params.filters) {
