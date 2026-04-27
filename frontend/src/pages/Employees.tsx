@@ -379,7 +379,7 @@ export default function EmployeesPage() {
                     {group.assets.map((asset) => (
                       <button
                         key={asset.id}
-                        onClick={() => { setOpen(false); navigate(route); }}
+                        onClick={() => { setOpen(false); navigate(`${route}?openId=${asset.id}`); }}
                         className="w-full text-left card p-3 hover:shadow-md hover:-translate-y-0.5 transition-all group flex items-center gap-3"
                       >
                         <div className="flex-1 min-w-0">

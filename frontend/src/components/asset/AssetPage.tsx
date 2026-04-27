@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../table/DataTable';
 import { Drawer } from '../ui/Drawer';
@@ -13,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export interface AssetCrudApi<T> {
   list: (p: ListParams) => Promise<PaginatedResponse<T>>;
+  get: (id: number) => Promise<T>;
   create: (data: any) => Promise<T>;
   update: (id: number, data: any) => Promise<T>;
   remove: (id: number) => Promise<void>;
@@ -98,6 +100,22 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
     setTab('details');
     setOpen(true);
   };
+
+  // Deep link: ?openId=123 opens that asset's drawer on load
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    const id = Number(openId);
+    if (!id) return;
+    api.get(id).then((row) => {
+      openEdit(row);
+      const next = new URLSearchParams(searchParams);
+      next.delete('openId');
+      setSearchParams(next, { replace: true });
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('openId')]);
 
   const loadHistory = async () => {
     if (!editing) return;
