@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/table/DataTable';
 import { Drawer } from '../components/ui/Drawer';
@@ -127,6 +127,22 @@ export default function EmployeesPage() {
     });
     setOpen(true);
   };
+
+  // Deep link: ?openId=123 opens that employee on load
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    const id = Number(openId);
+    if (!id) return;
+    employeesApi.get(id).then((row) => {
+      openEdit(row);
+      const next = new URLSearchParams(searchParams);
+      next.delete('openId');
+      setSearchParams(next, { replace: true });
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('openId')]);
 
   const loadAssets = async () => {
     if (!editing) return;
