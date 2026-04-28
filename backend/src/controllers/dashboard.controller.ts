@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../config/db';
 import { authMiddleware } from '../middleware/auth';
+import { enrichAuditRows } from '../services/entity-resolver.service';
 
 export const dashboardRouter = Router();
 dashboardRouter.use(authMiddleware);
@@ -152,7 +153,8 @@ dashboardRouter.get('/recent-activity', async (_req, res) => {
     )
     .orderBy('audit_logs.created_at', 'desc')
     .limit(15);
-  res.json(rows);
+  const enriched = await enrichAuditRows(rows);
+  res.json(enriched);
 });
 
 dashboardRouter.get('/charts', async (_req, res) => {

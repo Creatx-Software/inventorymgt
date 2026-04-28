@@ -1,9 +1,19 @@
 import { Router } from 'express';
 import db from '../config/db';
 import { authMiddleware } from '../middleware/auth';
+import { enrichAuditRows, ENTITY_TYPES } from '../services/entity-resolver.service';
 
 export const auditRouter = Router();
 auditRouter.use(authMiddleware);
+
+// Returns the list of entity-type keys + display names — used by the UI filter dropdown
+auditRouter.get('/entity-types', (_req, res) => {
+  const list = Object.entries(ENTITY_TYPES).map(([key, cfg]) => ({
+    key,
+    displayName: cfg.displayName,
+  }));
+  res.json(list);
+});
 
 auditRouter.get('/', async (req, res) => {
   const page = Math.max(1, Number(req.query.page || 1));
@@ -40,8 +50,10 @@ auditRouter.get('/', async (req, res) => {
     (buildWhere(db('audit_logs').leftJoin('users', 'audit_logs.user_id', 'users.id')) as any).count('audit_logs.id as total') as Promise<{ total: number }[]>,
   ]);
 
+  const enriched = await enrichAuditRows(rows);
+
   res.json({
-    data: rows,
+    data: enriched,
     pagination: {
       page, pageSize,
       total: Number(countRows[0].total),
