@@ -1,5 +1,6 @@
 import { AssetPage } from '../components/asset/AssetPage';
 import { commonAssetColumns } from '../components/asset/columns';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { fmtDate } from '../components/asset/CommonFields';
 import { serversApi } from '../api/assets';
 import type { Server } from '../types/assets';
@@ -117,24 +118,32 @@ export default function ServersPage() {
           <div className="col-span-2"><label className="label">Application Name</label><input className="input" value={extra.application_name} onChange={(e) => set({ ...extra, application_name: e.target.value })} /></div>
           <div><label className="label">CAN ID</label><input className="input" value={extra.can_id} onChange={(e) => set({ ...extra, can_id: e.target.value })} /></div>
           <div><label className="label">Application Tier</label>
-            <select className="input" value={extra.application_tier} onChange={(e) => set({ ...extra, application_tier: e.target.value as any })}>
-              <option value="">—</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
-            </select>
+            <SearchableSelect
+              value={extra.application_tier}
+              onChange={(v) => set({ ...extra, application_tier: v as any })}
+              options={['0','1','2','3','4'].map((x) => ({ value: x, label: x }))}
+            />
           </div>
           <div><label className="label">Server Class</label>
-            <select className="input" value={extra.server_class} onChange={(e) => set({ ...extra, server_class: e.target.value as any })}>
-              <option value="">—</option><option>Physical</option><option>Virtual</option>
-            </select>
+            <SearchableSelect
+              value={extra.server_class}
+              onChange={(v) => set({ ...extra, server_class: v as any })}
+              options={[{ value: 'Physical', label: 'Physical' }, { value: 'Virtual', label: 'Virtual' }]}
+            />
           </div>
           <div><label className="label">Server Type</label>
-            <select className="input" value={extra.server_type} onChange={(e) => set({ ...extra, server_type: e.target.value as any })}>
-              <option value="">—</option><option>Web</option><option>App</option><option>DB</option><option>Other</option>
-            </select>
+            <SearchableSelect
+              value={extra.server_type}
+              onChange={(v) => set({ ...extra, server_type: v as any })}
+              options={['Web','App','DB','Other'].map((x) => ({ value: x, label: x }))}
+            />
           </div>
           <div><label className="label">Environment</label>
-            <select className="input" value={extra.environment} onChange={(e) => set({ ...extra, environment: e.target.value as any })}>
-              <option value="">—</option><option>Prod</option><option>FB</option><option>DR</option>
-            </select>
+            <SearchableSelect
+              value={extra.environment}
+              onChange={(v) => set({ ...extra, environment: v as any })}
+              options={['Prod','FB','DR'].map((x) => ({ value: x, label: x }))}
+            />
           </div>
           <div><label className="label">Managed By</label><input className="input" value={extra.managed_by} onChange={(e) => set({ ...extra, managed_by: e.target.value })} /></div>
           <div><label className="label">OS Name & Version</label><input className="input" value={extra.os_name_version} onChange={(e) => set({ ...extra, os_name_version: e.target.value })} /></div>

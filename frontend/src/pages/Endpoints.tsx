@@ -7,6 +7,7 @@ import type { Endpoint, AssetStatus } from '../types/assets';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { ListParams } from '../types/api';
 import clsx from 'clsx';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 
 // PO format: PO/ICICIUK/DD/MM/YYYY/...
 // EOL = purchase date + 5 years
@@ -149,9 +150,12 @@ export default function EndpointsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label">Type</label>
-                <select className="input" value={extra.endpoint_type} onChange={(e) => set({ ...extra, endpoint_type: e.target.value as any })}>
-                  <option>Laptop</option><option>Desktop</option><option>Other</option>
-                </select>
+                <SearchableSelect
+                  value={extra.endpoint_type}
+                  onChange={(v) => set({ ...extra, endpoint_type: (v || 'Laptop') as any })}
+                  options={['Laptop','Desktop','Other'].map((x) => ({ value: x, label: x }))}
+                  emptyOption={null}
+                />
               </div>
               <div>
                 <label className="label">Host Name</label>

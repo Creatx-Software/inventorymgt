@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { UserCog, Plus, Pencil, Power, Loader2, AlertCircle, CheckCircle2, X, Eye, EyeOff } from 'lucide-react';
 import { usersApi, rolesApi } from '../api/rbac';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { useAuth } from '../contexts/AuthContext';
 
 interface UserRow {
@@ -405,19 +406,14 @@ export default function UsersPage() {
 
               <div>
                 <label className="label">Role</label>
-                <select
-                  className="input"
+                <SearchableSelect
                   value={form.role_id}
-                  onChange={(e) => setForm((f) => ({ ...f, role_id: e.target.value }))}
+                  onChange={(v) => setForm((f) => ({ ...f, role_id: v }))}
+                  options={availableRoles.map((r) => ({ value: String(r.id), label: r.name }))}
+                  emptyOption="-- No Role --"
+                  placeholder="-- No Role --"
                   disabled={editingUser?.id === currentUser?.id}
-                >
-                  <option value="">-- No Role --</option>
-                  {availableRoles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                />
                 {editingUser?.id === currentUser?.id && (
                   <p className="text-xs text-slate-400 mt-1">You cannot change your own role</p>
                 )}

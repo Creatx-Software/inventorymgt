@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { auditLogsApi, type AuditLog } from '../api/operations';
 import { Loader2, ChevronLeft, ChevronRight, Search, RefreshCw, Filter, X } from 'lucide-react';
 import clsx from 'clsx';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 
 const actionColor: Record<string, string> = {
   CREATE:  'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -70,10 +71,13 @@ export default function AuditLogsPage() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input className="input pl-9" placeholder="Search user or entity..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input" value={action} onChange={(e) => setAction(e.target.value)}>
-            <option value="">All actions</option>
-            {Object.keys(actionColor).map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
+          <SearchableSelect
+            value={action}
+            onChange={setAction}
+            options={Object.keys(actionColor).map((a) => ({ value: a, label: a }))}
+            emptyOption="All actions"
+            placeholder="All actions"
+          />
           <input className="input" placeholder="Entity type (e.g. endpoint)" value={entityType} onChange={(e) => setEntityType(e.target.value)} />
           <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
           <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />

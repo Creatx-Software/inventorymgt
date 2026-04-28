@@ -7,6 +7,7 @@ import { employeesApi, departmentsApi, locationsApi } from '../api/lookups';
 import { api } from '../api/client';
 import type { Employee, Department, Location } from '../types/api';
 import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen, Copy, Check } from 'lucide-react';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { consumablesApi } from '../api/consumables';
 import type { ConsumableAssignment } from '../types/api';
 
@@ -293,17 +294,19 @@ export default function EmployeesPage() {
             </div>
             <div className="col-span-1">
               <label className="label flex items-center">Department <CopyButton value={deptName(form.department_id ? Number(form.department_id) : null)} /></label>
-              <select className="input" value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>
-                <option value="">— None —</option>
-                {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.department_id}
+                onChange={(v) => setForm({ ...form, department_id: v })}
+                options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
+              />
             </div>
             <div className="col-span-1">
               <label className="label flex items-center">Location <CopyButton value={locName(form.location_id ? Number(form.location_id) : null)} /></label>
-              <select className="input" value={form.location_id} onChange={(e) => setForm({ ...form, location_id: e.target.value })}>
-                <option value="">— None —</option>
-                {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.location_id}
+                onChange={(v) => setForm({ ...form, location_id: v })}
+                options={locations.map((l) => ({ value: String(l.id), label: l.name }))}
+              />
             </div>
             <div className="col-span-1">
               <label className="flex items-center gap-2 text-sm">

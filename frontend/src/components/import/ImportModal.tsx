@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
 import clsx from 'clsx';
 import { previewImport, commitImport, type ImportPreview, type ImportResult } from '../../api/import';
+import { SearchableSelect } from '../ui/SearchableSelect';
 
 type Step = 'upload' | 'mapping' | 'dryrun' | 'done';
 
@@ -152,11 +153,14 @@ export function ImportModal({
               {/* Sheet selector */}
               <div className="flex items-center gap-3">
                 <label className="text-sm font-medium text-slate-700">Sheet:</label>
-                <select className="input w-auto" value={selectedSheet} onChange={(e) => onSheetChange(e.target.value)}>
-                  {preview.sheets.map((s) => (
-                    <option key={s.sheet} value={s.sheet}>{s.sheet} ({s.totalRows} rows)</option>
-                  ))}
-                </select>
+                <div className="w-72">
+                  <SearchableSelect
+                    value={selectedSheet}
+                    onChange={onSheetChange}
+                    options={preview.sheets.map((s) => ({ value: s.sheet, label: s.sheet, sublabel: `${s.totalRows} rows` }))}
+                    emptyOption={null}
+                  />
+                </div>
                 <span className="text-xs text-slate-500 ml-auto">
                   Mapped: <strong className="text-slate-900">{mappedCount}</strong> / {currentSheet.headers.length}
                 </span>
@@ -180,16 +184,13 @@ export function ImportModal({
                           {currentSheet.sampleRows[0]?.[h] != null ? String(currentSheet.sampleRows[0][h]) : <span className="text-slate-300">—</span>}
                         </td>
                         <td className="px-3 py-2">
-                          <select
-                            className="input py-1"
+                          <SearchableSelect
                             value={mapping[h] || ''}
-                            onChange={(e) => setMapping({ ...mapping, [h]: e.target.value || null })}
-                          >
-                            <option value="">— Skip —</option>
-                            {preview.fields.map((f) => (
-                              <option key={f.key} value={f.key}>{f.label}</option>
-                            ))}
-                          </select>
+                            onChange={(v) => setMapping({ ...mapping, [h]: v || null })}
+                            options={preview.fields.map((f) => ({ value: f.key, label: f.label }))}
+                            emptyOption="— Skip —"
+                            placeholder="— Skip —"
+                          />
                         </td>
                       </tr>
                     ))}

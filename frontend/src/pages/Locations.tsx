@@ -6,6 +6,7 @@ import { locationsApi } from '../api/lookups';
 import { api } from '../api/client';
 import type { Location } from '../types/api';
 import { Users, Package, PackageOpen, Loader2 } from 'lucide-react';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 import {
   RelatedAssetGroups, RelatedEmployeeList, RelatedConsumableList, CountBadge,
   type RelatedAssetGroup, type RelatedEmployee, type RelatedConsumable,
@@ -146,11 +147,16 @@ export default function LocationsPage() {
             </div>
             <div>
               <label className="label">Type</label>
-              <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as Location['type'] })}>
-                <option value="office">Office</option>
-                <option value="datacenter">Data Centre</option>
-                <option value="other">Other</option>
-              </select>
+              <SearchableSelect
+                value={form.type}
+                onChange={(v) => setForm({ ...form, type: (v || 'office') as Location['type'] })}
+                options={[
+                  { value: 'office', label: 'Office' },
+                  { value: 'datacenter', label: 'Data Centre' },
+                  { value: 'other', label: 'Other' },
+                ]}
+                emptyOption={null}
+              />
             </div>
             <div>
               <label className="label">Country</label>

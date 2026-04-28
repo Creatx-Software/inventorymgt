@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import type { Vendor, Location, Department, Employee } from '../../types/api';
 import type { AssetStatus } from '../../types/assets';
+import { SearchableSelect } from '../ui/SearchableSelect';
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
@@ -113,10 +114,11 @@ export function CommonFields({
       </div>
       <div>
         <label className="label flex items-center">Vendor / Make <CopyButton value={vendorName} /></label>
-        <select className="input" value={value.vendor_id} onChange={(e) => set('vendor_id', e.target.value)}>
-          <option value="">— None —</option>
-          {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-        </select>
+        <SearchableSelect
+          value={value.vendor_id}
+          onChange={(v) => set('vendor_id', v)}
+          options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+        />
       </div>
       <div>
         <label className="label flex items-center">Model <CopyButton value={value.model} /></label>
@@ -124,31 +126,44 @@ export function CommonFields({
       </div>
       <div>
         <label className="label flex items-center">Status * <CopyButton value={statusName} /></label>
-        <select className="input" value={value.status_id} onChange={(e) => set('status_id', e.target.value)} required>
-          <option value="">— Select —</option>
-          {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <SearchableSelect
+          value={value.status_id}
+          onChange={(v) => set('status_id', v)}
+          options={statuses.map((s) => ({ value: String(s.id), label: s.name }))}
+          emptyOption={null}
+          placeholder="— Select —"
+          required
+        />
       </div>
       <div>
         <label className="label flex items-center">Employee (Assigned To) <CopyButton value={employeeDisplay} /></label>
-        <select className="input" value={value.employee_id} onChange={(e) => set('employee_id', e.target.value)}>
-          <option value="">— Unassigned —</option>
-          {employees.map((e) => <option key={e.id} value={e.id}>{e.full_name}{e.employee_code ? ` (${e.employee_code})` : ''}</option>)}
-        </select>
+        <SearchableSelect
+          value={value.employee_id}
+          onChange={(v) => set('employee_id', v)}
+          options={employees.map((e) => ({
+            value: String(e.id),
+            label: e.full_name,
+            sublabel: e.employee_code || undefined,
+          }))}
+          emptyOption="— Unassigned —"
+          placeholder="— Unassigned —"
+        />
       </div>
       <div>
         <label className="label flex items-center">Location <CopyButton value={locationName} /></label>
-        <select className="input" value={value.location_id} onChange={(e) => set('location_id', e.target.value)}>
-          <option value="">— None —</option>
-          {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
+        <SearchableSelect
+          value={value.location_id}
+          onChange={(v) => set('location_id', v)}
+          options={locations.map((l) => ({ value: String(l.id), label: l.name }))}
+        />
       </div>
       <div>
         <label className="label flex items-center">Department <CopyButton value={departmentName} /></label>
-        <select className="input" value={value.department_id} onChange={(e) => set('department_id', e.target.value)}>
-          <option value="">— None —</option>
-          {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
+        <SearchableSelect
+          value={value.department_id}
+          onChange={(v) => set('department_id', v)}
+          options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
+        />
       </div>
       <div>
         <label className="label flex items-center">PO Number <CopyButton value={value.po_number} /></label>
