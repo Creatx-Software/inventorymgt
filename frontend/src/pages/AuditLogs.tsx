@@ -266,12 +266,19 @@ function AuditDetailModal({ log, onClose, onGotoEntity }: { log: AuditLog; onClo
     const after = changes.after || {};
     const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
     const SKIP = ['id', 'created_at', 'updated_at', 'deleted_at'];
+    const normalize = (v: any) => {
+      // Compare FK { id, label } objects by id only
+      if (v && typeof v === 'object' && 'id' in v && 'label' in v && Object.keys(v).length === 2) {
+        return v.id;
+      }
+      return v;
+    };
     return keys
       .filter((k) => !SKIP.includes(k))
       .map((k) => {
         const b = before[k];
         const a = after[k];
-        const same = JSON.stringify(b) === JSON.stringify(a);
+        const same = JSON.stringify(normalize(b)) === JSON.stringify(normalize(a));
         return { key: k, before: b, after: a, same };
       })
       .filter((r) => !r.same);
@@ -280,6 +287,18 @@ function AuditDetailModal({ log, onClose, onGotoEntity }: { log: AuditLog; onClo
   const fmt = (v: any) => {
     if (v == null) return <span className="text-slate-300 italic">empty</span>;
     if (typeof v === 'boolean') return v ? 'true' : 'false';
+    // FK reference shape: { id, label }
+    if (v && typeof v === 'object' && 'id' in v && 'label' in v && Object.keys(v).length === 2) {
+      if (v.label) {
+        return (
+          <span>
+            {v.label}
+            <span className="text-slate-400 text-xs ml-1">#{v.id}</span>
+          </span>
+        );
+      }
+      return <span className="font-mono text-xs">#{v.id}</span>;
+    }
     if (typeof v === 'object') return <code className="text-xs">{JSON.stringify(v)}</code>;
     return String(v);
   };

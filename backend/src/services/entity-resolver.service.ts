@@ -108,15 +108,113 @@ export interface EnrichedAuditLog {
   created_at: string;
 }
 
+/**
+ * Maps an FK column name → which lookup table+column to display.
+ * Used to resolve foreign-key IDs in audit-log change diffs.
+ */
+const FK_RESOLVERS: Record<string, { table: string; labelColumn: string }> = {
+  vendor_id:     { table: 'vendors',         labelColumn: 'name' },
+  location_id:   { table: 'locations',       labelColumn: 'name' },
+  department_id: { table: 'departments',     labelColumn: 'name' },
+  employee_id:   { table: 'employees',       labelColumn: 'full_name' },
+  status_id:     { table: 'asset_statuses',  labelColumn: 'name' },
+  role_id:       { table: 'roles',           labelColumn: 'name' },
+};
+
+function parseChanges(raw: any): any {
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch { return raw; }
+  }
+  return raw;
+}
+
+/**
+ * Walk a changes payload and collect FK column → set of ids that need lookup.
+ */
+function collectFkIds(changes: any): Map<string, Set<number>> {
+  const map = new Map<string, Set<number>>();
+  if (!changes || typeof changes !== 'object') return map;
+  const visit = (obj: any) => {
+    if (!obj || typeof obj !== 'object') return;
+    for (const [k, v] of Object.entries(obj)) {
+      if (FK_RESOLVERS[k] && (typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v)))) {
+        if (!map.has(k)) map.set(k, new Set());
+        map.get(k)!.add(Number(v));
+      } else if (v && typeof v === 'object') {
+        visit(v); // recurse into { before, after } etc.
+      }
+    }
+  };
+  visit(changes);
+  return map;
+}
+
+async function bulkResolveFkIds(allFkIds: Map<string, Set<number>>): Promise<Map<string, Map<number, string>>> {
+  const result = new Map<string, Map<number, string>>();
+  for (const [fkColumn, idSet] of allFkIds.entries()) {
+    const resolver = FK_RESOLVERS[fkColumn];
+    if (!resolver) continue;
+    try {
+      const ids = Array.from(idSet);
+      const rows = await db(resolver.table).whereIn('id', ids).select('id', resolver.labelColumn);
+      const labelMap = new Map<number, string>();
+      for (const row of rows as any[]) {
+        labelMap.set(row.id, String(row[resolver.labelColumn] ?? ''));
+      }
+      result.set(fkColumn, labelMap);
+    } catch { /* table may not exist */ }
+  }
+  return result;
+}
+
+/**
+ * Walk a changes payload and replace FK numeric values with `{ id, label }` objects
+ * so the frontend can render the human-readable label.
+ */
+function substituteFkLabels(obj: any, fkLabels: Map<string, Map<number, string>>): any {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map((item) => substituteFkLabels(item, fkLabels));
+  const out: any = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (FK_RESOLVERS[k] && (typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v)))) {
+      const id = Number(v);
+      const label = fkLabels.get(k)?.get(id) ?? null;
+      out[k] = { id, label };
+    } else if (v && typeof v === 'object') {
+      out[k] = substituteFkLabels(v, fkLabels);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 export async function enrichAuditRows(rows: any[]): Promise<EnrichedAuditLog[]> {
   const resolved = await resolveEntities(
     rows.map((r) => ({ entity_type: r.entity_type, entity_id: r.entity_id })),
   );
-  return rows.map((r) => {
+
+  // Bulk-collect FK IDs across all rows' changes, then look them up once
+  const allFk = new Map<string, Set<number>>();
+  const parsedChanges: any[] = [];
+  for (const r of rows) {
+    const c = parseChanges(r.changes);
+    parsedChanges.push(c);
+    const fk = collectFkIds(c);
+    for (const [col, ids] of fk.entries()) {
+      if (!allFk.has(col)) allFk.set(col, new Set());
+      ids.forEach((i) => allFk.get(col)!.add(i));
+    }
+  }
+  const fkLabels = await bulkResolveFkIds(allFk);
+
+  return rows.map((r, idx) => {
     const key = `${r.entity_type}:${r.entity_id}`;
     const ent = resolved.get(key) || { label: null, secondary: null, link: null };
     return {
       ...r,
+      changes: substituteFkLabels(parsedChanges[idx], fkLabels),
       entity_type_display: entityDisplayName(r.entity_type),
       entity_label: ent.label,
       entity_secondary: ent.secondary,
