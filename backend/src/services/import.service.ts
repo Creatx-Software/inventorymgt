@@ -24,6 +24,7 @@ export interface FieldDef {
 
 const COMMON_FIELDS: FieldDef[] = [
   { key: 'serial_number', label: 'Serial Number', kind: 'text', aliases: ['serial', 'asset serial'] },
+  { key: 'sap_asset_code', label: 'SAP Asset Code', kind: 'text', aliases: ['sap', 'sap code', 'sap asset'] },
   { key: 'asset_name', label: 'Asset Name', kind: 'text', aliases: ['name', 'asset'] },
   { key: 'vendor_id', label: 'Vendor / Make', kind: 'vendor', aliases: ['make', 'vendor', 'manufacturer'] },
   { key: 'model', label: 'Model', kind: 'text' },

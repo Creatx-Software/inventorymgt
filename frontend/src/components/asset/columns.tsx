@@ -21,6 +21,7 @@ export function commonAssetColumns<T extends AssetCommon>(): ColumnDef<T, any>[]
       ),
     },
     { accessorKey: 'asset_name', header: 'Name', size: 180, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
+    { accessorKey: 'sap_asset_code', header: 'SAP Code', size: 140, cell: (i) => i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
     { accessorKey: 'vendor_name', header: 'Vendor', size: 150, enableSorting: false, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'model', header: 'Model', size: 180, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'status_name', header: 'Status', size: 120, enableSorting: false,
