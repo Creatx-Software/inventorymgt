@@ -40,9 +40,9 @@ export const mobileDevicesRouter = buildAssetRouter({
 export const ipPhonesRouter = buildAssetRouter({
   table: 'ip_phones',
   assetType: 'ip_phone',
-  searchableColumns: commonSearch,
-  allowedSortColumns: commonSort,
-  allowedFilterColumns: commonFilter,
+  searchableColumns: [...commonSearch, 'mac_address'],
+  allowedSortColumns: [...commonSort, 'mac_address'],
+  allowedFilterColumns: [...commonFilter, 'mac_address'],
   defaultSort: { column: 'created_at', dir: 'desc' },
 });
 

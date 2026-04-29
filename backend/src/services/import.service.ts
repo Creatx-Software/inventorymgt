@@ -62,7 +62,10 @@ export const ASSET_FIELDS: Record<string, FieldDef[]> = {
     { key: 'imei_number', label: 'IMEI', kind: 'text', aliases: ['imei'] },
     { key: 'production_year', label: 'Production Year', kind: 'number', aliases: ['year'] },
   ],
-  ip_phone: [...COMMON_FIELDS],
+  ip_phone: [
+    ...COMMON_FIELDS,
+    { key: 'mac_address', label: 'MAC Address', kind: 'text', aliases: ['mac'] },
+  ],
   server: [
     ...COMMON_FIELDS,
     { key: 'application_name', label: 'Application Name', kind: 'text', aliases: ['application', 'app'] },
