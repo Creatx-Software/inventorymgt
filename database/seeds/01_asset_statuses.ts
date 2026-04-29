@@ -7,6 +7,7 @@ const statuses = [
   { id: 4, name: 'Disposed',     color: '#6b7280' },
   { id: 5, name: 'Lost',         color: '#ef4444' },
   { id: 6, name: 'Returned',     color: '#8b5cf6' },
+  { id: 7, name: 'Transfer',     color: '#06b6d4' },
 ];
 
 export async function seed(knex: Knex): Promise<void> {
