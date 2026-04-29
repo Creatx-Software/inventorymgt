@@ -34,6 +34,10 @@ export const employeesRouter = buildCrudRouter({
   table: 'employees',
   entityType: 'employee',
   searchableColumns: ['full_name', 'employee_code', 'email'],
+  joinedSearchColumns: [
+    { table: 'locations',   localKey: 'location_id',   searchColumn: 'name' },
+    { table: 'departments', localKey: 'department_id', searchColumn: 'name' },
+  ],
   allowedSortColumns: ['id', 'full_name', 'employee_code', 'created_at'],
   allowedFilterColumns: ['full_name', 'employee_code', 'email', 'department_id', 'location_id'],
   hasSoftDelete: true,

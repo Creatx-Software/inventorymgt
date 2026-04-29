@@ -11,9 +11,20 @@ export interface ListParams {
   includeDeleted?: boolean;
 }
 
+export interface JoinedSearchColumn {
+  /** Joined table, e.g. 'locations' */
+  table: string;
+  /** Local FK column, e.g. 'location_id' */
+  localKey: string;
+  /** Column to search on the joined table, e.g. 'name' */
+  searchColumn: string;
+}
+
 export interface CrudOptions {
   table: string;
   searchableColumns: string[];
+  /** Optional joined columns to also include in the global search (e.g. employees → locations.name) */
+  joinedSearchColumns?: JoinedSearchColumn[];
   allowedSortColumns: string[];
   allowedFilterColumns: string[];
   hasSoftDelete?: boolean;
@@ -34,41 +45,59 @@ export class CrudService<T extends Record<string, any>> {
     const pageSize = Math.min(500, Math.max(1, Number(params.pageSize || 100)));
     const offset = (page - 1) * pageSize;
 
+    const T = this.opts.table;
+    const joins = this.opts.joinedSearchColumns || [];
+
+    const applyJoins = (q: Knex.QueryBuilder) => {
+      for (const j of joins) {
+        q.leftJoin(j.table, `${T}.${j.localKey}`, `${j.table}.id`);
+      }
+      return q;
+    };
+
     const buildWhere = (q: Knex.QueryBuilder) => {
       if (this.opts.hasSoftDelete && !params.includeDeleted) {
-        q.whereNull(`${this.opts.table}.deleted_at`);
+        q.whereNull(`${T}.deleted_at`);
       }
-      if (params.search && this.opts.searchableColumns.length > 0) {
+      if (params.search && (this.opts.searchableColumns.length > 0 || joins.length > 0)) {
         const term = `%${params.search}%`;
         q.where((sub) => {
-          this.opts.searchableColumns.forEach((col, i) => {
-            if (i === 0) sub.where(col, 'like', term);
-            else sub.orWhere(col, 'like', term);
-          });
+          let first = true;
+          for (const col of this.opts.searchableColumns) {
+            const qualified = col.includes('.') ? col : `${T}.${col}`;
+            if (first) { sub.where(qualified, 'like', term); first = false; }
+            else sub.orWhere(qualified, 'like', term);
+          }
+          for (const j of joins) {
+            const qualified = `${j.table}.${j.searchColumn}`;
+            if (first) { sub.where(qualified, 'like', term); first = false; }
+            else sub.orWhere(qualified, 'like', term);
+          }
         });
       }
       if (params.filters) {
         for (const [k, v] of Object.entries(params.filters)) {
           if (!v) continue;
           if (!this.opts.allowedFilterColumns.includes(k)) continue;
-          q.where(k, 'like', `%${v}%`);
+          q.where(`${T}.${k}`, 'like', `%${v}%`);
         }
       }
       return q;
     };
 
-    const dataQ = buildWhere(db(this.opts.table).select('*'));
-    const countQ = buildWhere(db(this.opts.table));
+    const dataQ = buildWhere(applyJoins(db(T).select(`${T}.*`)));
+    const countQ = buildWhere(applyJoins(db(T)));
 
-    const sortBy =
+    const sortByRaw =
       params.sortBy && this.opts.allowedSortColumns.includes(params.sortBy)
         ? params.sortBy
         : this.opts.defaultSort?.column || 'id';
+    const sortBy = sortByRaw.includes('.') ? sortByRaw : `${T}.${sortByRaw}`;
     const sortDir = params.sortDir === 'asc' ? 'asc' : 'desc';
 
     const [rows, [{ total }]] = await Promise.all([
       dataQ.orderBy(sortBy, sortDir).limit(pageSize).offset(offset),
-      countQ.count<{ total: number }[]>('* as total'),
+      countQ.countDistinct<{ total: number }[]>(`${T}.id as total`),
     ]);
 
     return {
