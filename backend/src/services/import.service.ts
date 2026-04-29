@@ -321,6 +321,16 @@ export async function executeImport(args: {
           asset_type: args.assetType,
           asset_id: id,
         });
+        // Open assignment record if assigned to an employee
+        if (data.employee_id) {
+          await trx('asset_assignments').insert({
+            asset_type: args.assetType,
+            asset_id: id,
+            employee_id: data.employee_id,
+            assigned_date: new Date(),
+            notes: 'Created via Excel import',
+          });
+        }
         result.inserted++;
       } catch (e: any) {
         result.errors.push({ row: i + 2, error: e.message });
