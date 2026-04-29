@@ -3,6 +3,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { PackagePlus, ArrowDownToLine, UserPlus, RotateCcw, History } from 'lucide-react';
 import clsx from 'clsx';
 import { DataTable } from '../components/table/DataTable';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { Drawer } from '../components/ui/Drawer';
 import { consumablesApi } from '../api/consumables';
 import { vendorsApi } from '../api/lookups';
@@ -445,17 +446,19 @@ export default function ConsumableStockPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Vendor</label>
-              <select className="input" value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
-                <option value="">— None —</option>
-                {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.vendor_id}
+                onChange={(v) => setForm({ ...form, vendor_id: v })}
+                options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+              />
             </div>
             <div>
               <label className="label">Storage Location</label>
-              <select className="input" value={form.location_id} onChange={(e) => setForm({ ...form, location_id: e.target.value })}>
-                <option value="">— None —</option>
-                {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.location_id}
+                onChange={(v) => setForm({ ...form, location_id: v })}
+                options={locations.map((l) => ({ value: String(l.id), label: l.name }))}
+              />
             </div>
           </div>
 
@@ -590,18 +593,19 @@ export default function ConsumableStockPage() {
           {(actionType === 'assign' || actionType === 'return') && (
             <div>
               <label className="label">Employee *</label>
-              <select
-                className="input"
+              <SearchableSelect
                 value={actionForm.employee_id}
-                onChange={(e) => setActionForm({ ...actionForm, employee_id: e.target.value })}
-              >
-                <option value="">— Select employee —</option>
-                {employees.filter((emp) => emp.is_active && !emp.deleted_at).map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.full_name}{emp.employee_code ? ` (${emp.employee_code})` : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setActionForm({ ...actionForm, employee_id: v })}
+                options={employees
+                  .filter((emp) => emp.is_active && !emp.deleted_at)
+                  .map((emp) => ({
+                    value: String(emp.id),
+                    label: emp.full_name,
+                    sublabel: emp.employee_code || undefined,
+                  }))}
+                emptyOption={null}
+                placeholder="— Select employee —"
+              />
             </div>
           )}
 

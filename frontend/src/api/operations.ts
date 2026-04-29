@@ -47,10 +47,19 @@ export interface AuditLog {
   user_full_name: string | null;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'RESTORE' | 'LOGIN' | 'IMPORT' | 'EXPORT';
   entity_type: string;
+  entity_type_display: string;
   entity_id: number | null;
+  entity_label: string | null;
+  entity_secondary: string | null;
+  entity_link: string | null;
   changes: any;
   ip_address: string | null;
   created_at: string;
+}
+
+export interface AuditEntityType {
+  key: string;
+  displayName: string;
 }
 
 export const auditLogsApi = {
@@ -64,4 +73,5 @@ export const auditLogsApi = {
     const r = await api.get('/audit-logs', { params: q });
     return r.data;
   },
+  entityTypes: async (): Promise<AuditEntityType[]> => (await api.get('/audit-logs/entity-types')).data,
 };

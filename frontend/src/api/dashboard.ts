@@ -38,7 +38,11 @@ export interface RecentActivity {
   id: number;
   action: string;
   entity_type: string;
+  entity_type_display: string;
   entity_id: number | null;
+  entity_label: string | null;
+  entity_secondary: string | null;
+  entity_link: string | null;
   created_at: string;
   username: string | null;
   user_full_name: string | null;

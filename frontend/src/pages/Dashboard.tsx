@@ -172,23 +172,45 @@ export default function Dashboard() {
           {activity.length === 0 ? (
             <div className="text-center text-sm text-slate-400 py-12">No activity yet</div>
           ) : (
-            <div className="space-y-3 max-h-80 overflow-y-auto">
-              {activity.map((a) => (
-                <div key={a.id} className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-600 shrink-0">
-                    {(a.user_full_name || a.username || '?')[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-slate-700">
-                      <span className="font-medium">{a.user_full_name || a.username || 'System'}</span>{' '}
-                      <span className={`font-medium ${actionColor[a.action] || ''}`}>{a.action.toLowerCase()}</span>{' '}
-                      <span className="font-mono">{a.entity_type}</span>
-                      {a.entity_id != null && <span className="text-slate-500"> #{a.entity_id}</span>}
+            <div className="space-y-1 max-h-80 overflow-y-auto -mx-2">
+              {activity.map((a) => {
+                const userName = a.user_full_name || a.username || 'System';
+                const initial = (userName[0] || '?').toUpperCase();
+                const verb = a.action.toLowerCase();
+                const hasLink = !!a.entity_link;
+                const content = (
+                  <div className="flex items-start gap-3 px-2 py-2 rounded-lg group">
+                    <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[11px] font-semibold text-slate-600 shrink-0">
+                      {initial}
                     </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">{timeAgo(a.created_at)}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-slate-700 leading-snug">
+                        <span className="font-medium text-slate-900">{userName}</span>{' '}
+                        <span className={`${actionColor[a.action] || 'text-slate-600'}`}>{verb}</span>{' '}
+                        <span className="text-slate-500">{a.entity_type_display.toLowerCase()}</span>{' '}
+                        {a.entity_label ? (
+                          <span className={`font-medium text-slate-900 ${hasLink ? 'group-hover:text-brand-700 group-hover:underline' : ''}`}>
+                            {a.entity_label}
+                          </span>
+                        ) : a.entity_id != null ? (
+                          <span className="font-mono text-slate-400">#{a.entity_id}</span>
+                        ) : null}
+                        {a.entity_secondary && (
+                          <span className="text-slate-500"> · {a.entity_secondary}</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">{timeAgo(a.created_at)}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+                return hasLink ? (
+                  <Link key={a.id} to={a.entity_link!} className="block hover:bg-slate-50 rounded-lg transition-colors">
+                    {content}
+                  </Link>
+                ) : (
+                  <div key={a.id}>{content}</div>
+                );
+              })}
             </div>
           )}
         </div>
