@@ -24,6 +24,7 @@ export interface FieldDef {
 
 const COMMON_FIELDS: FieldDef[] = [
   { key: 'serial_number', label: 'Serial Number', kind: 'text', aliases: ['serial', 'asset serial'] },
+  { key: 'sap_asset_code', label: 'SAP Asset Code', kind: 'text', aliases: ['sap', 'sap code', 'sap asset'] },
   { key: 'asset_name', label: 'Asset Name', kind: 'text', aliases: ['name', 'asset'] },
   { key: 'vendor_id', label: 'Vendor / Make', kind: 'vendor', aliases: ['make', 'vendor', 'manufacturer'] },
   { key: 'model', label: 'Model', kind: 'text' },
@@ -62,7 +63,10 @@ export const ASSET_FIELDS: Record<string, FieldDef[]> = {
     { key: 'imei_number', label: 'IMEI', kind: 'text', aliases: ['imei'] },
     { key: 'production_year', label: 'Production Year', kind: 'number', aliases: ['year'] },
   ],
-  ip_phone: [...COMMON_FIELDS],
+  ip_phone: [
+    ...COMMON_FIELDS,
+    { key: 'mac_address', label: 'MAC Address', kind: 'text', aliases: ['mac'] },
+  ],
   server: [
     ...COMMON_FIELDS,
     { key: 'application_name', label: 'Application Name', kind: 'text', aliases: ['application', 'app'] },
@@ -317,6 +321,16 @@ export async function executeImport(args: {
           asset_type: args.assetType,
           asset_id: id,
         });
+        // Open assignment record if assigned to an employee
+        if (data.employee_id) {
+          await trx('asset_assignments').insert({
+            asset_type: args.assetType,
+            asset_id: id,
+            employee_id: data.employee_id,
+            assigned_date: new Date(),
+            notes: 'Created via Excel import',
+          });
+        }
         result.inserted++;
       } catch (e: any) {
         result.errors.push({ row: i + 2, error: e.message });

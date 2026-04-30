@@ -15,7 +15,7 @@ interface AssetGroup {
   key: string;
   label: string;
   count: number;
-  assets: { id: number; serial_number: string; asset_name: string | null; model: string | null; status_name: string; status_color: string }[];
+  assets: { id: number; serial_number: string; asset_name: string | null; model: string | null; status_name: string; status_color: string; host_name?: string | null }[];
 }
 
 interface EmployeeAssets {
@@ -407,6 +407,7 @@ export default function EmployeesPage() {
                           </div>
                           <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
                             <span className="font-mono">{asset.serial_number}</span>
+                            {asset.host_name && <span>· <span className="font-medium text-slate-700">{asset.host_name}</span></span>}
                             {asset.model && <span>· {asset.model}</span>}
                           </div>
                         </div>

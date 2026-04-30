@@ -27,6 +27,7 @@ function CopyButton({ value }: { value: string }) {
 
 export interface CommonFormState {
   serial_number: string;
+  sap_asset_code: string;
   asset_name: string;
   vendor_id: string;
   model: string;
@@ -40,13 +41,14 @@ export interface CommonFormState {
 }
 
 export const emptyCommon: CommonFormState = {
-  serial_number: '', asset_name: '', vendor_id: '', model: '', location_id: '',
+  serial_number: '', sap_asset_code: '', asset_name: '', vendor_id: '', model: '', location_id: '',
   department_id: '', employee_id: '', status_id: '', po_number: '', invoice_number: '', remarks: '',
 };
 
 export function commonToPayload(c: CommonFormState) {
   return {
     serial_number: c.serial_number || null,
+    sap_asset_code: c.sap_asset_code || null,
     asset_name: c.asset_name || null,
     vendor_id: c.vendor_id ? Number(c.vendor_id) : null,
     model: c.model || null,
@@ -63,6 +65,7 @@ export function commonToPayload(c: CommonFormState) {
 export function rowToCommon(row: any): CommonFormState {
   return {
     serial_number: row.serial_number || '',
+    sap_asset_code: row.sap_asset_code || '',
     asset_name: row.asset_name || '',
     vendor_id: row.vendor_id ? String(row.vendor_id) : '',
     model: row.model || '',
@@ -111,6 +114,10 @@ export function CommonFields({
       <div>
         <label className="label flex items-center">Asset Name <CopyButton value={value.asset_name} /></label>
         <input className="input" value={value.asset_name} onChange={(e) => set('asset_name', e.target.value)} />
+      </div>
+      <div>
+        <label className="label flex items-center">SAP Asset Code <CopyButton value={value.sap_asset_code} /></label>
+        <input className="input font-mono" value={value.sap_asset_code} onChange={(e) => set('sap_asset_code', e.target.value)} />
       </div>
       <div>
         <label className="label flex items-center">Vendor / Make <CopyButton value={vendorName} /></label>

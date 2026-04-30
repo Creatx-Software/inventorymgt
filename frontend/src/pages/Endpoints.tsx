@@ -1,12 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
 import { AssetPage } from '../components/asset/AssetPage';
 import { commonAssetColumns } from '../components/asset/columns';
 import { fmtDate, StatusBadge } from '../components/asset/CommonFields';
-import { endpointsApi, assetStatusesApi } from '../api/assets';
-import type { Endpoint, AssetStatus } from '../types/assets';
+import { endpointsApi } from '../api/assets';
+import type { Endpoint } from '../types/assets';
 import type { ColumnDef } from '@tanstack/react-table';
-import type { ListParams } from '../types/api';
-import clsx from 'clsx';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 
 // PO format: PO/ICICIUK/DD/MM/YYYY/...
@@ -56,67 +53,14 @@ const columns: ColumnDef<Endpoint, any>[] = [
 ];
 
 export default function EndpointsPage() {
-  const [statuses, setStatuses] = useState<AssetStatus[]>([]);
-  const [activeStatus, setActiveStatus] = useState<AssetStatus | null>(null);
-
-  useEffect(() => {
-    assetStatusesApi.list().then(setStatuses).catch(() => {});
-  }, []);
-
-  const filteredApi = useMemo(() => ({
-    ...endpointsApi,
-    list: (p: ListParams) => endpointsApi.list({
-      ...p,
-      filters: {
-        ...p.filters,
-        ...(activeStatus ? { status_id: String(activeStatus.id) } : {}),
-      },
-    }),
-  }), [activeStatus]);
-
   return (
-    <div className="space-y-3">
-      {/* Status tabs */}
-      {statuses.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setActiveStatus(null)}
-            className={clsx(
-              'px-3 py-1.5 rounded-lg text-sm font-medium transition border',
-              activeStatus === null
-                ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
-            )}
-          >
-            All
-          </button>
-          {statuses.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setActiveStatus(s)}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition border',
-                activeStatus?.id === s.id
-                  ? 'text-white border-transparent shadow-sm'
-                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
-              )}
-              style={activeStatus?.id === s.id
-                ? { backgroundColor: s.color, borderColor: s.color }
-                : { borderLeftColor: s.color, borderLeftWidth: 3 }
-              }
-            >
-              {s.name}
-            </button>
-          ))}
-        </div>
-      )}
-
+    <>
       <AssetPage<Endpoint, Extra>
         title="Endpoints"
-        subtitle={activeStatus ? `Filtered: ${activeStatus.name}` : 'Laptops, desktops, scanners'}
+        subtitle="Laptops, desktops, scanners"
         resource="endpoints"
         assetType="endpoint"
-        api={filteredApi}
+        api={endpointsApi}
         columns={columns}
         stickyColumnIds={['host_name']}
         defaultSorting={[{ id: 'host_name', desc: false }]}
@@ -219,6 +163,6 @@ export default function EndpointsPage() {
           );
         }}
       />
-    </div>
+    </>
   );
 }

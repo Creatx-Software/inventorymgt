@@ -1,6 +1,7 @@
 export interface AssetCommon {
   id: number;
   serial_number: string;
+  sap_asset_code: string | null;
   asset_name: string | null;
   vendor_id: number | null;
   vendor_name?: string | null;
@@ -48,7 +49,9 @@ export interface MobileDevice extends AssetCommon {
   production_year: number | null;
 }
 
-export interface IpPhone extends AssetCommon {}
+export interface IpPhone extends AssetCommon {
+  mac_address: string | null;
+}
 
 export interface Server extends AssetCommon {
   application_name: string | null;

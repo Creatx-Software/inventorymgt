@@ -6,14 +6,14 @@ export const lookupRelatedRouter = Router();
 lookupRelatedRouter.use(authMiddleware);
 
 const ASSET_TABLES = [
-  { key: 'endpoint',       table: 'endpoints',       label: 'Endpoints' },
-  { key: 'monitor',        table: 'monitors',        label: 'Monitors' },
-  { key: 'mobile_device',  table: 'mobile_devices',  label: 'Mobile Devices' },
-  { key: 'ip_phone',       table: 'ip_phones',       label: 'IP Phones' },
-  { key: 'server',         table: 'servers',         label: 'Servers' },
-  { key: 'printer',        table: 'printers',        label: 'Printers' },
-  { key: 'network_device', table: 'network_devices', label: 'Network Devices' },
-  { key: 'other_asset',    table: 'other_assets',    label: 'Other Assets' },
+  { key: 'endpoint',       table: 'endpoints',       label: 'Endpoints',       hasHostName: true },
+  { key: 'monitor',        table: 'monitors',        label: 'Monitors',        hasHostName: true },
+  { key: 'mobile_device',  table: 'mobile_devices',  label: 'Mobile Devices',  hasHostName: false },
+  { key: 'ip_phone',       table: 'ip_phones',       label: 'IP Phones',       hasHostName: false },
+  { key: 'server',         table: 'servers',         label: 'Servers',         hasHostName: true },
+  { key: 'printer',        table: 'printers',        label: 'Printers',        hasHostName: true },
+  { key: 'network_device', table: 'network_devices', label: 'Network Devices', hasHostName: true },
+  { key: 'other_asset',    table: 'other_assets',    label: 'Other Assets',    hasHostName: true },
 ];
 
 interface AssetSummary {
@@ -23,6 +23,7 @@ interface AssetSummary {
   model: string | null;
   status_name: string | null;
   status_color: string | null;
+  host_name?: string | null;
 }
 
 interface AssetGroup {
@@ -35,19 +36,21 @@ interface AssetGroup {
 async function fetchAssetsByFk(fkColumn: 'department_id' | 'location_id' | 'vendor_id', fkValue: number) {
   const groups: AssetGroup[] = [];
   let totalCount = 0;
-  for (const { key, table, label } of ASSET_TABLES) {
+  for (const { key, table, label, hasHostName } of ASSET_TABLES) {
+    const cols = [
+      `${table}.id`,
+      `${table}.serial_number`,
+      `${table}.asset_name`,
+      `${table}.model`,
+      'asset_statuses.name as status_name',
+      'asset_statuses.color as status_color',
+    ];
+    if (hasHostName) cols.push(`${table}.host_name`);
     const rows = await db(table)
       .leftJoin('asset_statuses', `${table}.status_id`, 'asset_statuses.id')
       .where(`${table}.${fkColumn}`, fkValue)
       .whereNull(`${table}.deleted_at`)
-      .select(
-        `${table}.id`,
-        `${table}.serial_number`,
-        `${table}.asset_name`,
-        `${table}.model`,
-        'asset_statuses.name as status_name',
-        'asset_statuses.color as status_color',
-      );
+      .select(cols);
     groups.push({ key, label, count: rows.length, assets: rows as AssetSummary[] });
     totalCount += rows.length;
   }

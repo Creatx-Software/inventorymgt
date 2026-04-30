@@ -63,6 +63,16 @@ async function insertAsset(
   }
   const [id] = await trx(table).insert({ ...data, serial_number: serial });
   await trx('serial_registry').insert({ serial_number: serial, asset_type: assetType, asset_id: id });
+  // Open an assignment record if assigned to an employee
+  if (data.employee_id) {
+    await trx('asset_assignments').insert({
+      asset_type: assetType,
+      asset_id: id,
+      employee_id: data.employee_id,
+      assigned_date: new Date(),
+      notes: 'Imported from xlsx',
+    });
+  }
   return id;
 }
 

@@ -21,6 +21,7 @@ export interface RelatedAsset {
   model: string | null;
   status_name: string | null;
   status_color: string | null;
+  host_name?: string | null;
 }
 
 export interface RelatedAssetGroup {
@@ -88,6 +89,7 @@ export function RelatedAssetGroups({
                     </div>
                     <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
                       <span className="font-mono">{asset.serial_number}</span>
+                      {asset.host_name && <span>· <span className="font-medium text-slate-700">{asset.host_name}</span></span>}
                       {asset.model && <span>· {asset.model}</span>}
                     </div>
                   </div>

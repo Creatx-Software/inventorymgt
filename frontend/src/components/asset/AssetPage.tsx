@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
+import clsx from 'clsx';
 import { DataTable } from '../table/DataTable';
 import { Drawer } from '../ui/Drawer';
 import { CommonFields, emptyCommon, commonToPayload, rowToCommon, type CommonFormState } from './CommonFields';
@@ -83,7 +84,15 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
     }).catch(() => {});
   }, []);
 
-  const fetcher = useCallback((p: ListParams) => api.list(p), [api, reloadKey]);
+  const [activeStatus, setActiveStatus] = useState<AssetStatus | null>(null);
+
+  const fetcher = useCallback((p: ListParams) => api.list({
+    ...p,
+    filters: {
+      ...p.filters,
+      ...(activeStatus ? { status_id: String(activeStatus.id) } : {}),
+    },
+  }), [api, reloadKey, activeStatus]);
 
   const openNew = () => {
     setEditing(null);
@@ -151,7 +160,42 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
   };
 
   return (
-    <>
+    <div className="space-y-3">
+      {/* Status filter tabs */}
+      {statuses.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setActiveStatus(null)}
+            className={clsx(
+              'px-3 py-1.5 rounded-lg text-sm font-medium transition border',
+              activeStatus === null
+                ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+            )}
+          >
+            All
+          </button>
+          {statuses.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setActiveStatus(s)}
+              className={clsx(
+                'px-3 py-1.5 rounded-lg text-sm font-medium transition border',
+                activeStatus?.id === s.id
+                  ? 'text-white border-transparent shadow-sm'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+              )}
+              style={activeStatus?.id === s.id
+                ? { backgroundColor: s.color, borderColor: s.color }
+                : { borderLeftColor: s.color, borderLeftWidth: 3 }
+              }
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <DataTable<T>
         title={title}
         subtitle={subtitle}
@@ -276,6 +320,6 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
           </div>
         )}
       </Drawer>
-    </>
+    </div>
   );
 }

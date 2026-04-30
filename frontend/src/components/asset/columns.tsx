@@ -37,6 +37,7 @@ export function commonAssetColumns<T extends AssetCommon>(): ColumnDef<T, any>[]
     { accessorKey: 'department_name', header: 'Department', size: 150, enableSorting: false, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'po_number', header: 'PO #', size: 140, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'invoice_number', header: 'Invoice #', size: 140, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
+    { accessorKey: 'sap_asset_code', header: 'SAP Code', size: 140, cell: (i) => i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
     { accessorKey: 'created_at', header: 'Created', size: 110, cell: (i) => fmtDate(i.getValue() as string) },
   ];
 }
