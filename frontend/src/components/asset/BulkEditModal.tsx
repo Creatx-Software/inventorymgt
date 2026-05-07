@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import clsx from 'clsx';
 import { SearchableSelect } from '../ui/SearchableSelect';
@@ -58,6 +59,14 @@ export function BulkEditModal({
       setActive([]); setPicker(false); setConfirmStep(false);
       setTypedCount(''); setSubmitting(false); setResult(null);
     }
+  }, [open]);
+
+  // Body scroll lock while open
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
 
   if (!open) return null;
@@ -127,9 +136,16 @@ export function BulkEditModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+  return createPortal(
+    <div
+      className="fixed z-50 flex items-center justify-center p-4"
+      style={{ top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh' }}
+    >
+      <div
+        className="absolute bg-slate-900/60 backdrop-blur-sm"
+        style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+        onClick={onClose}
+      />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[760px] max-h-[92vh] flex flex-col overflow-hidden">
         <div className="px-6 h-16 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div>
@@ -291,7 +307,8 @@ export function BulkEditModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
