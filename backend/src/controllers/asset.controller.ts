@@ -84,6 +84,24 @@ export function buildAssetRouter(opts: AssetCrudOptions) {
     res.json({ deleted: n });
   });
 
+  router.post('/bulk-update', requirePermission(`${perm}_edit`), async (req: AuthRequest, res) => {
+    try {
+      const ids: number[] = req.body?.ids || [];
+      const updates: Record<string, any> = req.body?.updates || {};
+      const result = await svc.bulkUpdate(ids, updates, req.user!.id);
+      await audit({
+        userId: req.user!.id,
+        action: 'UPDATE',
+        entityType: opts.assetType,
+        changes: { ids, updates, bulk: true, updated: result.updated, errors: result.errors.length },
+        ipAddress: req.ip,
+      });
+      res.json(result);
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
   router.delete('/:id/permanent', requirePermission(`${perm}_delete`), async (req: AuthRequest, res) => {
     try {
       const id = Number(req.params.id);

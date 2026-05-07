@@ -11,6 +11,8 @@ export interface AssetCrudOptions {
   searchableColumns: string[];
   allowedSortColumns: string[];
   allowedFilterColumns: string[];
+  /** Whitelist of fields that can be bulk-edited (server-side validation) */
+  bulkEditableFields?: string[];
   defaultSort?: { column: string; dir: 'asc' | 'desc' };
 }
 
@@ -293,6 +295,70 @@ export class AssetService {
         .update({ returned_date: new Date() });
       return n;
     });
+  }
+
+  /**
+   * Bulk-update specific fields on many assets at once.
+   * - Validates fields against bulkEditableFields whitelist
+   * - For each asset: applies update, manages asset_assignments if employee_id changes
+   * - Returns per-asset success/error so the UI can show partial results
+   */
+  async bulkUpdate(
+    ids: number[],
+    updates: Record<string, any>,
+    userId: number | null,
+  ): Promise<{ updated: number; errors: { id: number; error: string }[] }> {
+    if (!ids.length || !Object.keys(updates).length) return { updated: 0, errors: [] };
+
+    const whitelist = this.opts.bulkEditableFields || [];
+    const cleanUpdates: Record<string, any> = {};
+    for (const [k, v] of Object.entries(updates)) {
+      if (whitelist.includes(k)) cleanUpdates[k] = v;
+    }
+    if (!Object.keys(cleanUpdates).length) {
+      throw new Error('No valid fields to update');
+    }
+
+    let updated = 0;
+    const errors: { id: number; error: string }[] = [];
+
+    // Process each asset in its own transaction so one failure doesn't roll back others
+    for (const id of ids) {
+      try {
+        await db.transaction(async (trx) => {
+          const before = await trx(this.opts.table).where({ id }).first();
+          if (!before) throw new Error('Not found');
+
+          // Employee changed → close prior assignment, open new one
+          if ('employee_id' in cleanUpdates && cleanUpdates.employee_id !== before.employee_id) {
+            await trx('asset_assignments')
+              .where({ asset_type: this.opts.assetType, asset_id: id })
+              .whereNull('returned_date')
+              .update({ returned_date: new Date() });
+            if (cleanUpdates.employee_id) {
+              await trx('asset_assignments').insert({
+                asset_type: this.opts.assetType,
+                asset_id: id,
+                employee_id: cleanUpdates.employee_id,
+                assigned_date: new Date(),
+                assigned_by_user_id: userId,
+                notes: 'Bulk reassignment',
+              });
+            }
+          }
+
+          await trx(this.opts.table)
+            .where({ id })
+            .update({ ...cleanUpdates, updated_at: trx.fn.now() });
+        });
+        updated++;
+      } catch (e: any) {
+        errors.push({ id, error: e.message || 'Update failed' });
+      }
+    }
+
+    // Single audit entry summarising the bulk action (per-asset entries can be added later if needed)
+    return { updated, errors };
   }
 
   async assignmentHistory(id: number) {

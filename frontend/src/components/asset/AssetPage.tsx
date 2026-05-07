@@ -9,8 +9,10 @@ import { vendorsApi, locationsApi, departmentsApi, employeesApi } from '../../ap
 import { assetStatusesApi, getAssignmentHistory } from '../../api/assets';
 import type { Vendor, Location, Department, Employee, ListParams, PaginatedResponse } from '../../types/api';
 import type { AssetStatus, AssignmentHistory, AssetCommon } from '../../types/assets';
-import { History, Loader2, Upload } from 'lucide-react';
+import { History, Loader2, Upload, PencilLine } from 'lucide-react';
 import { ImportModal } from '../import/ImportModal';
+import { BulkEditModal } from './BulkEditModal';
+import { getBulkFieldsForType } from './bulkEditFields';
 import { useAuth } from '../../contexts/AuthContext';
 
 export interface AssetCrudApi<T> {
@@ -23,6 +25,7 @@ export interface AssetCrudApi<T> {
   restore: (id: number) => Promise<void>;
   hardDelete: (id: number) => Promise<void>;
   bulkHardDelete: (ids: number[]) => Promise<{ deleted: number }>;
+  bulkUpdate: (ids: number[], updates: Record<string, any>) => Promise<{ updated: number; errors: { id: number; error: string }[] }>;
 }
 
 export interface AssetPageProps<T extends AssetCommon, ExtraForm extends Record<string, any>> {
@@ -51,6 +54,8 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
   const canDelete = hasPermission(`${perm}_delete`);
 
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<number[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<T | null>(null);
   const [common, setCommon] = useState<CommonFormState>(emptyCommon);
@@ -210,13 +215,23 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
         stickyColumnIds={stickyColumnIds}
         viewKey={`asset-${assetType}`}
         defaultSorting={defaultSorting}
-        extraActions={
-          canCreate ? (
-            <button onClick={() => setImportOpen(true)} className="btn-secondary">
-              <Upload className="w-4 h-4" /> Import
-            </button>
-          ) : undefined
-        }
+        extraActions={({ selectedIds }) => (
+          <>
+            {canEdit && selectedIds.length > 0 && (
+              <button
+                onClick={() => { setBulkSelectedIds(selectedIds); setBulkOpen(true); }}
+                className="btn bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100"
+              >
+                <PencilLine className="w-4 h-4" /> Bulk Edit ({selectedIds.length})
+              </button>
+            )}
+            {canCreate && (
+              <button onClick={() => setImportOpen(true)} className="btn-secondary">
+                <Upload className="w-4 h-4" /> Import
+              </button>
+            )}
+          </>
+        )}
       />
 
       <ImportModal
@@ -225,6 +240,15 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
         assetType={assetType}
         title={title}
         onSuccess={() => setReloadKey((k) => k + 1)}
+      />
+
+      <BulkEditModal
+        open={bulkOpen}
+        onClose={() => { setBulkOpen(false); setReloadKey((k) => k + 1); }}
+        selectedCount={bulkSelectedIds.length}
+        title={title}
+        fields={getBulkFieldsForType(assetType)}
+        onSubmit={(updates) => api.bulkUpdate(bulkSelectedIds, updates)}
       />
 
       <Drawer
