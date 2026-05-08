@@ -7,7 +7,7 @@ import { Lock, User2, Loader2 } from 'lucide-react';
 export default function Login() {
   useEffect(() => { document.title = 'Login — ICICI Inventory'; }, []);
   const { user, login } = useAuth();
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);

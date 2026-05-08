@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
@@ -20,15 +21,27 @@ export function Drawer({
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  // Body scroll lock while open
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   const widthClass = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl' }[width];
 
-  return (
-    <div className={clsx('fixed inset-0 z-40', !open && 'pointer-events-none')}>
+  return createPortal(
+    <div
+      className={clsx('fixed z-40', !open && 'pointer-events-none')}
+      style={{ top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh' }}
+    >
       <div
         className={clsx(
-          'absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity',
+          'absolute bg-slate-900/40 backdrop-blur-sm transition-opacity',
           open ? 'opacity-100' : 'opacity-0',
         )}
+        style={{ top: 0, left: 0, right: 0, bottom: 0 }}
         onClick={onClose}
       />
       <div
@@ -48,6 +61,7 @@ export function Drawer({
         <div className="flex-1 overflow-y-auto p-6">{children}</div>
         {footer && <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
