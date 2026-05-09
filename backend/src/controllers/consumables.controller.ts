@@ -106,8 +106,9 @@ consumablesRouter.post('/', requirePermission('consumables_create'), async (req:
   try {
     const {
       name, category, description, vendor_id, location_id,
-      unit, minimum_stock, po_number, invoice_number, remarks,
+      unit, minimum_stock, remarks,
       initial_stock, initial_stock_date, initial_stock_reference,
+      initial_po_number, initial_invoice_number,
     } = req.body;
 
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
@@ -125,8 +126,6 @@ consumablesRouter.post('/', requirePermission('consumables_create'), async (req:
         unit: unit?.trim() || 'each',
         current_stock: initialQty,
         minimum_stock: minimum_stock != null ? Number(minimum_stock) : null,
-        po_number: po_number?.trim() || null,
-        invoice_number: invoice_number?.trim() || null,
         remarks: remarks?.trim() || null,
       });
       newId = id;
@@ -140,6 +139,8 @@ consumablesRouter.post('/', requirePermission('consumables_create'), async (req:
           performed_by_user_id: req.user!.id,
           transaction_date: initial_stock_date || new Date().toISOString().slice(0, 10),
           reference_number: initial_stock_reference?.trim() || null,
+          po_number: initial_po_number?.trim() || null,
+          invoice_number: initial_invoice_number?.trim() || null,
           notes: 'Opening stock',
         });
       }
@@ -168,7 +169,7 @@ consumablesRouter.put('/:id', requirePermission('consumables_edit'), async (req:
     const id = Number(req.params.id);
     const {
       name, category, description, vendor_id, location_id,
-      unit, minimum_stock, po_number, invoice_number, remarks,
+      unit, minimum_stock, remarks,
     } = req.body;
 
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
@@ -181,8 +182,6 @@ consumablesRouter.put('/:id', requirePermission('consumables_edit'), async (req:
       location_id: location_id || null,
       unit: unit?.trim() || 'each',
       minimum_stock: minimum_stock != null ? Number(minimum_stock) : null,
-      po_number: po_number?.trim() || null,
-      invoice_number: invoice_number?.trim() || null,
       remarks: remarks?.trim() || null,
       updated_at: db.fn.now(),
     });
@@ -238,7 +237,7 @@ consumablesRouter.post('/:id/restore', requirePermission('consumables_edit'), as
 consumablesRouter.post('/:id/stock-in', requirePermission('consumables_edit'), async (req: AuthRequest, res: Response) => {
   try {
     const id = Number(req.params.id);
-    const { quantity, reference_number, notes, transaction_date } = req.body;
+    const { quantity, reference_number, po_number, invoice_number, notes, transaction_date } = req.body;
 
     const qty = Number(quantity);
     if (!qty || qty < 1) return res.status(400).json({ error: 'Quantity must be at least 1' });
@@ -252,6 +251,8 @@ consumablesRouter.post('/:id/stock-in', requirePermission('consumables_edit'), a
         performed_by_user_id: req.user!.id,
         transaction_date: transaction_date || new Date().toISOString().slice(0, 10),
         reference_number: reference_number?.trim() || null,
+        po_number: po_number?.trim() || null,
+        invoice_number: invoice_number?.trim() || null,
         notes: notes?.trim() || null,
       });
 
@@ -265,7 +266,7 @@ consumablesRouter.post('/:id/stock-in', requirePermission('consumables_edit'), a
       action: 'UPDATE',
       entityType: 'consumable_item',
       entityId: id,
-      changes: { transaction_type: 'stock_in', quantity: qty, reference_number },
+      changes: { transaction_type: 'stock_in', quantity: qty, po_number, invoice_number, reference_number },
       ipAddress: req.ip,
     });
 

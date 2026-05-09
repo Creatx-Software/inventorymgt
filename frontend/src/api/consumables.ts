@@ -26,6 +26,8 @@ export const consumablesApi = {
     quantity: number;
     transaction_date: string;
     reference_number?: string;
+    po_number?: string;
+    invoice_number?: string;
     notes?: string;
   }): Promise<ConsumableItem> => {
     const r = await api.post(`/consumables/${id}/stock-in`, data);

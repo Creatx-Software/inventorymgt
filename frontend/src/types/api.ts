@@ -74,8 +74,6 @@ export interface ConsumableItem {
   unit: string;
   current_stock: number;
   minimum_stock: number | null;
-  po_number: string | null;
-  invoice_number: string | null;
   remarks: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -94,6 +92,8 @@ export interface ConsumableTransaction {
   performed_by_username?: string | null;
   transaction_date: string;
   reference_number: string | null;
+  po_number: string | null;
+  invoice_number: string | null;
   notes: string | null;
   created_at: string;
 }
