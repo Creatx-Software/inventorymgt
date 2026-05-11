@@ -1,6 +1,6 @@
 import { buildAssetRouter } from '../controllers/asset.controller';
 
-const commonSearch = ['serial_number', 'sap_asset_code', 'asset_name', 'model'];
+const commonSearch = ['serial_number', 'sap_asset_code', 'asset_name', 'model', 'po_number', 'invoice_number'];
 const commonSort = [
   'id', 'serial_number', 'sap_asset_code', 'asset_name', 'model', 'created_at', 'updated_at',
   'vendor_id', 'location_id', 'department_id', 'employee_id', 'status_id',
