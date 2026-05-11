@@ -146,7 +146,19 @@ export function CommonFields({
         <label className="label flex items-center">Employee (Assigned To) <CopyButton value={employeeDisplay} /></label>
         <SearchableSelect
           value={value.employee_id}
-          onChange={(v) => set('employee_id', v)}
+          onChange={(v) => {
+            // Auto-fill department + location from the employee, but only if those fields are empty
+            // (so we don't overwrite an intentional choice).
+            if (v) {
+              const emp = employees.find((e) => String(e.id) === v);
+              const next = { ...value, employee_id: v };
+              if (emp?.department_id && !next.department_id) next.department_id = String(emp.department_id);
+              if (emp?.location_id   && !next.location_id)   next.location_id   = String(emp.location_id);
+              onChange(next);
+            } else {
+              set('employee_id', v);
+            }
+          }}
           options={employees.map((e) => ({
             value: String(e.id),
             label: e.full_name,
