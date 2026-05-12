@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { PackagePlus, ArrowDownToLine, UserPlus, RotateCcw, History } from 'lucide-react';
+import { PackagePlus, ArrowDownToLine, UserPlus, RotateCcw, History, Search, X } from 'lucide-react';
 import clsx from 'clsx';
 import { DataTable } from '../components/table/DataTable';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
@@ -206,11 +206,13 @@ export default function ConsumableStockPage() {
   const [transactions, setTransactions] = useState<ConsumableTransaction[]>([]);
   const [assignments, setAssignments] = useState<ConsumableAssignment[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
 
   const openHistory = async (item: ConsumableItem, e: React.MouseEvent) => {
     e.stopPropagation();
     setHistoryItem(item);
     setHistoryTab('transactions');
+    setHistorySearch('');
     setHistoryOpen(true);
     setHistoryLoading(true);
     try {
@@ -714,9 +716,76 @@ export default function ConsumableStockPage() {
         ) : historyTab === 'transactions' ? (
           transactions.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm">No transactions yet</div>
-          ) : (
-            <div className="space-y-2">
-              {transactions.map((tx) => (
+          ) : (() => {
+            const q = historySearch.trim().toLowerCase();
+            const filtered = q
+              ? transactions.filter((tx) =>
+                  (tx.po_number || '').toLowerCase().includes(q)
+                  || (tx.invoice_number || '').toLowerCase().includes(q)
+                  || (tx.reference_number || '').toLowerCase().includes(q),
+                )
+              : transactions;
+            const stockInQty = filtered
+              .filter((tx) => tx.transaction_type === 'stock_in')
+              .reduce((sum, tx) => sum + (tx.quantity || 0), 0);
+            const assignedQty = filtered
+              .filter((tx) => tx.transaction_type === 'assigned')
+              .reduce((sum, tx) => sum + (tx.quantity || 0), 0);
+            const returnedQty = filtered
+              .filter((tx) => tx.transaction_type === 'returned')
+              .reduce((sum, tx) => sum + (tx.quantity || 0), 0);
+            return (
+              <>
+                {/* Search */}
+                <div className="mb-3">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                    <input
+                      className="input pl-8 pr-8"
+                      placeholder="Filter by PO, Invoice or reference…"
+                      value={historySearch}
+                      onChange={(e) => setHistorySearch(e.target.value)}
+                    />
+                    {historySearch && (
+                      <button
+                        onClick={() => setHistorySearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                        title="Clear"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Search summary */}
+                {q && (
+                  <div className="mb-3 grid grid-cols-3 gap-2">
+                    <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-emerald-700">Stocked in</div>
+                      <div className="text-xl font-bold text-emerald-700">+{stockInQty}</div>
+                    </div>
+                    <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-amber-700">Assigned</div>
+                      <div className="text-xl font-bold text-amber-700">−{assignedQty}</div>
+                    </div>
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-blue-700">Returned</div>
+                      <div className="text-xl font-bold text-blue-700">+{returnedQty}</div>
+                    </div>
+                    <div className="col-span-3 text-xs text-slate-500">
+                      {filtered.length === 0
+                        ? <>No transactions match <strong className="text-slate-700">"{historySearch}"</strong></>
+                        : <>Showing <strong className="text-slate-700">{filtered.length}</strong> of {transactions.length} transactions matching <strong className="text-slate-700">"{historySearch}"</strong></>}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {filtered.length === 0 && !q && (
+                    <div className="text-center py-6 text-slate-400 text-sm">No transactions match the search.</div>
+                  )}
+                  {filtered.map((tx) => (
                 <div key={tx.id} className="flex items-start justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
@@ -756,8 +825,10 @@ export default function ConsumableStockPage() {
                   </div>
                 </div>
               ))}
-            </div>
-          )
+                </div>
+              </>
+            );
+          })()
         ) : (
           assignments.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm">No items currently held by employees</div>
