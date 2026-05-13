@@ -6,6 +6,7 @@ import { Drawer } from '../components/ui/Drawer';
 import { employeesApi, departmentsApi, locationsApi } from '../api/lookups';
 import { api } from '../api/client';
 import type { Employee, Department, Location } from '../types/api';
+import clsx from 'clsx';
 import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen, Copy, Check } from 'lucide-react';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { consumablesApi } from '../api/consumables';
@@ -66,7 +67,16 @@ export default function EmployeesPage() {
   const [consumables, setConsumables] = useState<import('../types/api').EmployeeConsumable[] | null>(null);
   const [consumablesLoading, setConsumablesLoading] = useState(false);
 
-  const fetcher = useCallback((p: any) => employeesApi.list(p), [reloadKey]);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
+
+  const fetcher = useCallback((p: any) => employeesApi.list({
+    ...p,
+    filters: {
+      ...p.filters,
+      ...(activeFilter === 'active'   ? { is_active: '1' } :
+          activeFilter === 'inactive' ? { is_active: '0' } : {}),
+    },
+  }), [reloadKey, activeFilter]);
 
   useEffect(() => {
     departmentsApi.list({ pageSize: 500 }).then((r) => setDepartments(r.data)).catch(() => {});
@@ -203,6 +213,42 @@ export default function EmployeesPage() {
 
   return (
     <>
+      {/* Active / Inactive filter tabs — same style as asset status tabs */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setActiveFilter('all')}
+          className={clsx(
+            'px-3 py-1.5 rounded-lg text-sm font-medium transition border',
+            activeFilter === 'all'
+              ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+          )}
+        >
+          All
+        </button>
+        {([
+          { key: 'active',   label: 'Active',   color: '#10b981' },
+          { key: 'inactive', label: 'Inactive', color: '#64748b' },
+        ] as const).map((opt) => (
+          <button
+            key={opt.key}
+            onClick={() => setActiveFilter(opt.key)}
+            className={clsx(
+              'px-3 py-1.5 rounded-lg text-sm font-medium transition border',
+              activeFilter === opt.key
+                ? 'text-white border-transparent shadow-sm'
+                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+            )}
+            style={activeFilter === opt.key
+              ? { backgroundColor: opt.color, borderColor: opt.color }
+              : { borderLeftColor: opt.color, borderLeftWidth: 3 }
+            }
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       <DataTable<Employee>
         title="Employees"
         subtitle="People assets are assigned to"
