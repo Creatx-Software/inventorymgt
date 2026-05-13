@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import clsx from 'clsx';
-import { DataTable } from '../table/DataTable';
+import { DataTable, type FilterFieldDef } from '../table/DataTable';
 import { Drawer } from '../ui/Drawer';
 import { CommonFields, emptyCommon, commonToPayload, rowToCommon, type CommonFormState } from './CommonFields';
 import { vendorsApi, locationsApi, departmentsApi, employeesApi } from '../../api/lookups';
@@ -41,11 +41,15 @@ export interface AssetPageProps<T extends AssetCommon, ExtraForm extends Record<
   rowToExtra: (row: T) => ExtraForm;
   renderExtraFields: (extra: ExtraForm, setExtra: (e: ExtraForm) => void, common: CommonFormState) => ReactNode;
   defaultSorting?: { id: string; desc: boolean }[];
+  /** Extra column filter fields specific to this asset type (common filters are added automatically) */
+  extraFilterFields?: FilterFieldDef[];
 }
+
+export type { FilterFieldDef };
 
 export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string, any>>({
   title, subtitle, resource, assetType, api, columns, stickyColumnIds,
-  emptyExtra, extraToPayload, rowToExtra, renderExtraFields, defaultSorting,
+  emptyExtra, extraToPayload, rowToExtra, renderExtraFields, defaultSorting, extraFilterFields,
 }: AssetPageProps<T, ExtraForm>) {
   const { hasPermission } = useAuth();
   const perm = `${assetType}s`; // e.g. 'endpoint' → 'endpoints'
@@ -91,11 +95,42 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
 
   const [activeStatus, setActiveStatus] = useState<AssetStatus | null>(null);
 
+  const filterFields = useMemo<FilterFieldDef[]>(() => [
+    {
+      key: 'status_id',
+      label: 'Status',
+      type: 'select',
+      options: statuses.map((s) => ({ value: String(s.id), label: s.name })),
+    },
+    {
+      key: 'location_id',
+      label: 'Location',
+      type: 'select',
+      options: locations.map((l) => ({ value: String(l.id), label: l.name })),
+    },
+    {
+      key: 'department_id',
+      label: 'Department',
+      type: 'select',
+      options: departments.map((d) => ({ value: String(d.id), label: d.name })),
+    },
+    {
+      key: 'vendor_id',
+      label: 'Vendor / Make',
+      type: 'select',
+      options: vendors.map((v) => ({ value: String(v.id), label: v.name })),
+    },
+    { key: 'model',     label: 'Model',     type: 'text', placeholder: 'Filter by model…'  },
+    { key: 'po_number', label: 'PO Number', type: 'text', placeholder: 'Filter by PO…'     },
+    ...(extraFilterFields ?? []),
+  ], [statuses, locations, departments, vendors, extraFilterFields]);
+
   const fetcher = useCallback((p: ListParams) => api.list({
     ...p,
     filters: {
-      ...p.filters,
+      // tab provides the default; panel filter overrides it if explicitly set
       ...(activeStatus ? { status_id: String(activeStatus.id) } : {}),
+      ...p.filters,
     },
   }), [api, reloadKey, activeStatus]);
 
@@ -215,6 +250,7 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
         stickyColumnIds={stickyColumnIds}
         viewKey={`asset-${assetType}`}
         defaultSorting={defaultSorting}
+        filterFields={filterFields}
         extraActions={({ selectedIds }) => (
           <>
             {canEdit && selectedIds.length > 0 && (

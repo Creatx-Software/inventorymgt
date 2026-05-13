@@ -10,10 +10,18 @@ import {
 } from '@tanstack/react-table';
 import {
   Search, Plus, Trash2, Download, RefreshCw, Settings2, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, Loader2, X, Trash, RotateCcw,
+  ArrowUp, ArrowDown, Loader2, X, Trash, RotateCcw, SlidersHorizontal,
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { ListParams, PaginatedResponse } from '../../types/api';
+
+export interface FilterFieldDef {
+  key: string;
+  label: string;
+  type: 'text' | 'select';
+  options?: { value: string; label: string }[];
+  placeholder?: string;
+}
 
 export interface DataTableProps<T extends { id: number }> {
   title: string;
@@ -34,6 +42,8 @@ export interface DataTableProps<T extends { id: number }> {
   viewKey?: string;
   /** Initial sort state — column id + direction */
   defaultSorting?: { id: string; desc: boolean }[];
+  /** Column filter fields shown in the filter panel */
+  filterFields?: FilterFieldDef[];
 }
 
 export function DataTable<T extends { id: number; deleted_at?: string | null }>({
@@ -45,6 +55,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
   extraActions,
   viewKey,
   defaultSorting = [],
+  filterFields,
 }: DataTableProps<T>) {
   const storageKey = viewKey ? `dt:${viewKey}` : null;
   const loadPersisted = () => {
@@ -72,7 +83,15 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
   const [showColMenu, setShowColMenu] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [showFilters, setShowFilters] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const activeColumnFilters = useMemo(
+    () => Object.fromEntries(Object.entries(columnFilters).filter(([, v]) => v !== '')),
+    [columnFilters],
+  );
+  const activeFilterCount = Object.keys(activeColumnFilters).length;
 
   // Persist visibility + pageSize whenever they change
   useEffect(() => {
@@ -143,13 +162,14 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
         sortBy: sort?.id,
         sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
         includeDeleted: showDeleted,
+        filters: activeFilterCount > 0 ? activeColumnFilters : undefined,
       });
       setData(r.data);
       setTotal(r.pagination.total);
     } finally {
       setLoading(false);
     }
-  }, [fetcher, page, pageSize, search, sorting, showDeleted]);
+  }, [fetcher, page, pageSize, search, sorting, showDeleted, activeColumnFilters]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -161,6 +181,16 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const selectedIds = Object.keys(rowSelection).map(Number);
   const hasSelection = selectedIds.length > 0;
+
+  const setFilter = (key: string, value: string) => {
+    setColumnFilters((prev) => ({ ...prev, [key]: value }));
+    setPage(1);
+  };
+
+  const clearAllFilters = () => {
+    setColumnFilters({});
+    setPage(1);
+  };
 
   const handleBulkDelete = async () => {
     if (!onBulkDelete || !hasSelection) return;
@@ -228,6 +258,8 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
 
   const isSticky = (id: string) => id === '__select__' || stickyColumnIds.includes(id);
 
+  const hasFilterFields = filterFields && filterFields.length > 0;
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -277,23 +309,110 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
         </div>
       </div>
 
+      {/* Search + Filter panel */}
       <div className="card p-3">
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            ref={searchRef}
-            placeholder="Search... (press / to focus)"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="input pl-9 pr-9"
-          />
-          {searchInput && (
-            <button onClick={() => setSearchInput('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-              <X className="w-4 h-4" />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              ref={searchRef}
+              placeholder="Search... (press / to focus)"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="input pl-9 pr-9"
+            />
+            {searchInput && (
+              <button onClick={() => setSearchInput('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          {hasFilterFields && (
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className={clsx(
+                'btn-secondary relative',
+                (showFilters || activeFilterCount > 0) && 'border-brand-300 bg-brand-50 text-brand-700',
+              )}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-brand-600 text-white text-[10px] font-bold">
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
           )}
         </div>
+
+        {/* Filter panel */}
+        {showFilters && hasFilterFields && (
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+              {filterFields!.map((field) => (
+                <div key={field.key}>
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1 block">
+                    {field.label}
+                  </label>
+                  {field.type === 'select' ? (
+                    <select
+                      value={columnFilters[field.key] || ''}
+                      onChange={(e) => setFilter(field.key, e.target.value)}
+                      className="input py-1.5 text-sm w-full"
+                    >
+                      <option value="">All</option>
+                      {field.options?.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={columnFilters[field.key] || ''}
+                      onChange={(e) => setFilter(field.key, e.target.value)}
+                      placeholder={field.placeholder || `Filter…`}
+                      className="input py-1.5 text-sm w-full"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            {activeFilterCount > 0 && (
+              <button
+                onClick={clearAllFilters}
+                className="mt-2 text-xs text-brand-600 hover:underline flex items-center gap-1"
+              >
+                <X className="w-3 h-3" /> Clear all filters
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Active filter chips — shown when panel is closed but filters are active */}
+      {activeFilterCount > 0 && !showFilters && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-slate-500 font-medium">Filters:</span>
+          {Object.entries(activeColumnFilters).map(([key, value]) => {
+            const field = filterFields?.find((f) => f.key === key);
+            const displayValue = field?.type === 'select'
+              ? (field.options?.find((o) => o.value === value)?.label ?? value)
+              : value;
+            return (
+              <span key={key} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 border border-brand-200 text-xs text-brand-700">
+                <span className="font-medium">{field?.label ?? key}:</span> {displayValue}
+                <button onClick={() => setFilter(key, '')} className="ml-0.5 text-brand-400 hover:text-brand-600">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            );
+          })}
+          <button onClick={clearAllFilters} className="text-xs text-slate-400 hover:text-slate-600 underline">
+            Clear all
+          </button>
+        </div>
+      )}
 
       {showDeleted && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-800 flex items-center gap-2">

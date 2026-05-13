@@ -85,7 +85,9 @@ export class AssetService {
       if (params.filters) {
         for (const [k, v] of Object.entries(params.filters)) {
           if (!v || !this.opts.allowedFilterColumns.includes(k)) continue;
-          q.where(`${T}.${k}`, 'like', `%${v}%`);
+          // FK columns: exact match; text columns: substring match
+          if (k.endsWith('_id')) q.where(`${T}.${k}`, v);
+          else q.where(`${T}.${k}`, 'like', `%${v}%`);
         }
       }
       return q;
