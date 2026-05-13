@@ -44,9 +44,10 @@ inventory-mgt/
 │   │   ├── api/              # Axios API clients (assets.ts, lookups.ts, rbac.ts, etc.)
 │   │   ├── components/
 │   │   │   ├── layout/       # Sidebar, Header, AppLayout
-│   │   │   ├── table/        # DataTable, filters, column toggles
+│   │   │   ├── table/        # DataTable (with column filter panel), filters, column toggles
+│   │   │   ├── asset/        # CommonFields (shared form), AssetPage (shared page wrapper)
 │   │   │   ├── forms/        # Reusable form fields
-│   │   │   └── ui/           # Buttons, modals, drawers
+│   │   │   └── ui/           # Buttons, modals, drawers, SearchableSelect
 │   │   ├── pages/
 │   │   │   ├── Login.tsx
 │   │   │   ├── Dashboard.tsx
@@ -59,15 +60,16 @@ inventory-mgt/
 │   │   │   ├── NetworkDevices.tsx
 │   │   │   ├── OtherAssets.tsx
 │   │   │   ├── Incidents.tsx
-│   │   │   ├── Employees.tsx
+│   │   │   ├── Employees.tsx       # All/Active/Inactive filter tabs
 │   │   │   ├── Locations.tsx
 │   │   │   ├── Departments.tsx
 │   │   │   ├── Vendors.tsx
-│   │   │   ├── AuditLogs.tsx
+│   │   │   ├── AuditLogs.tsx       # with Excel export + preview modal
+│   │   │   ├── Consumables.tsx
 │   │   │   ├── Settings.tsx
-│   │   │   ├── UsersPage.tsx     # user management (superadmin/admin)
-│   │   │   ├── RolesPage.tsx     # role & permission management
-│   │   │   └── ApprovalsPage.tsx # pending approval review (superadmin only)
+│   │   │   ├── UsersPage.tsx       # user management (superadmin/admin)
+│   │   │   ├── RolesPage.tsx       # role & permission management
+│   │   │   └── ApprovalsPage.tsx   # pending approval review (superadmin only)
 │   │   ├── contexts/         # AuthContext (includes role + permissions)
 │   │   ├── hooks/
 │   │   ├── types/
@@ -86,10 +88,15 @@ inventory-mgt/
 ├── backend/                  # Express + TS
 │   ├── src/
 │   │   ├── config/           # db, env
-│   │   ├── controllers/      # asset.controller, auth, roles, users, incidents, etc.
+│   │   ├── controllers/      # asset.controller, auth, roles, users, incidents, audit, etc.
 │   │   ├── routes/
 │   │   ├── middleware/       # auth (with requirePermission factory), error
 │   │   ├── services/         # business logic, excel import/export
+│   │   │   ├── crud.service.ts     # generic CRUD (FK filters use exact =, not LIKE)
+│   │   │   └── asset.service.ts    # asset-specific list/filter logic
+│   │   ├── scripts/
+│   │   │   ├── update-eol-from-po.ts        # bulk EOL backfill from PO number
+│   │   │   └── sync-employee-location.ts    # bulk sync asset dept/loc from employee
 │   │   ├── models/
 │   │   ├── utils/
 │   │   ├── types/
@@ -100,9 +107,11 @@ inventory-mgt/
 │
 ├── database/
 │   ├── migrations/
-│   │   ├── 20240101000000_init_schema.ts   # all base tables
-│   │   ├── 20240102000000_rbac.ts          # roles, role_permissions, users.role_id
-│   │   └── 20240103000000_pending_approvals.ts  # pending_approvals table
+│   │   ├── 20240101000000_init_schema.ts        # all base tables
+│   │   ├── 20240102000000_rbac.ts               # roles, role_permissions, users.role_id
+│   │   ├── 20240103000000_pending_approvals.ts  # pending_approvals table
+│   │   ├── 20240104000000_consumables.ts        # consumable_items + consumable_transactions
+│   │   └── 20240104000001_consumables_perms.ts  # consumables permissions for system roles
 │   ├── seeds/
 │   │   ├── 01_asset_statuses.ts   # idempotent (skips existing rows)
 │   │   ├── 02_admin_user.ts       # seeds default admin
@@ -480,7 +489,9 @@ GET                  /api/incidents/:id
 
 ### Audit
 ```
-GET    /api/audit-logs
+GET    /api/audit-logs                  # list (from, to, search, action, entity_type, page, pageSize)
+GET    /api/audit-logs/export           # Excel download — same filters, up to 10 000 rows
+                                        # includes current asset state (status, location, employee, etc.)
 ```
 
 ### Consumables
@@ -592,6 +603,7 @@ Sidebar items are filtered automatically based on the logged-in user's permissio
 - Status column is **sortable** (sorts by status name via `asset_statuses.name`)
 - `endpoint_type` options: Laptop, Desktop, Other — **Scanner is not offered in the UI** (DB ENUM still includes it for existing records)
 - **EOL auto-calculate**: PO number format `PO/ICICIUK/DD/MM/YYYY/suffix` — the date is extracted and EOL = purchase date + 5 years. Shown as a suggestion in the edit drawer. Script `npm run update-eol` bulk-updates all existing records.
+- **Column filter panel extra fields**: Type (select), Host Name (text), IP Address (text)
 
 ---
 
@@ -600,6 +612,26 @@ Sidebar items are filtered automatically based on the logged-in user's permissio
 - **IBN_BIG.svg** (from `/public`) is displayed in the Header (left side) and on the Login screen
 - Login screen footer: "Design & Developed by: creatxsoftware.com" (opens in new tab)
 - `employee_code` column is labelled **"Employee ID"** everywhere in the UI (field name unchanged in DB/API)
+
+### Column Filter Panel (DataTable)
+- Every asset page has a collapsible **Filters** panel (`SlidersHorizontal` icon, shows active count badge)
+- Standard filters on all asset pages: **Status** (select), **Location** (select), **Department** (select), **Vendor** (select), **Model** (text), **PO Number** (text)
+- Individual asset pages can add extra fields via `extraFilterFields` prop
+- Active filters shown as dismissible chips below the panel when it is closed
+- `FilterFieldDef` interface in `DataTable.tsx`: `{ key, label, type: 'text'|'select', options?, placeholder? }`
+- FK/boolean columns (`_id` suffix, `is_` prefix) use exact `=` match; text columns use `LIKE '%v%'`
+- Filter panel selection overrides the status tab (panel wins on `status_id` conflict)
+
+### Asset Form — Employee Auto-fill
+- Selecting an employee in any asset form **automatically sets** department and location to match that employee's values
+- A `Wand2` icon + "from employee" hint appears on the Location and Department labels when the value was auto-filled
+- Fields remain fully editable — user can override manually at any time
+- Clearing the employee field leaves the dept/location values as-is (does not blank them)
+
+### Employees Page — Active/Inactive Filter
+- Three toggle tabs: **All**, **Active** (green), **Inactive** (grey) — styled identically to asset status tabs
+- Injects `is_active: '1' | '0'` into the list query filter
+- Tabs sit in a `space-y-3` wrapper to maintain consistent spacing with other pages
 
 ---
 
@@ -613,6 +645,23 @@ Sidebar items are filtered automatically based on the logged-in user's permissio
 
 ### Charts
 - Assets by location (bar), by status (pie), by department (bar), by vendor (bar, top 10)
+
+---
+
+## Audit Log — Excel Export
+
+`GET /api/audit-logs/export` streams an `.xlsx` file with the same date-range, search, action, and entity_type filters as the list endpoint.
+
+- Fetches up to **10 000** audit rows
+- Enriches each row with the **current state** of the affected asset (batch-fetched — one JOIN query per asset type, not per row, to avoid N+1)
+- 22 columns: Date/Time, Changed By, Action, Asset Type, Serial Number, Asset Name, Current Status, Vendor/Make, Model, Location, Department, Assigned To, Host Name, IP Address, OS/Version, Application Name, Device Name, Mobile Number, IMEI, PO Number, Remarks, Auditor IP
+- Extra columns are blank for asset types that don't have that field
+
+Frontend **Export Preview Modal** (`AuditLogs.tsx`):
+- Opens before download
+- Fetches 50-row preview and total row count using current filters
+- Shows active filter chips (date range, action, entity type, search term)
+- User reviews then clicks **Download** to trigger the blob download
 
 ---
 
@@ -659,8 +708,11 @@ npm start
 npm run migrate           # knex migrate:latest (run after pulling new migrations)
 npm run migrate:rollback
 npm run seed              # idempotent — safe to re-run
-npm run import-excel      # one-time migration of the source xlsx
-npm run update-eol        # one-time: calculate eol_date from po_number for all endpoints (PO date + 5 years)
+npm run import-excel              # one-time migration of the source xlsx
+npm run update-eol                # one-time: calculate eol_date from po_number for all endpoints (PO date + 5 years)
+npm run sync-employee-location    # bulk-sync dept/location on all assigned assets to match employee
+npm run sync-employee-location -- --dry-run           # preview only — nothing written
+npm run sync-employee-location -- --table=endpoints   # single table only
 
 # Frontend
 cd frontend
@@ -731,6 +783,14 @@ npm run dev
 - Category filter tabs (derived from distinct categories in the table)
 - Permission resource: `consumables` — view/create/edit/delete; seeded for all system roles via migration `20240104000001`
 - Route: `/consumables`; sidebar item under Assets section
+
+### Phase 11 — Filtering, Audit Export & Data Consistency ✅
+- **Column filter panel** on all asset pages — collapsible, active-filter chips, standard fields (Status, Location, Department, Vendor, Model, PO Number) + per-page extras
+- **Audit Log Excel export** — date-range filtered, current asset state enrichment, Export Preview Modal
+- **Employee Active/Inactive tabs** on Employees page matching asset status tab style
+- **Auto-fill dept/location from employee** in asset forms — Wand2 "from employee" hint, user can still override
+- **`npm run sync-employee-location`** — bulk-updates all 8 asset tables so dept/location matches assigned employee; supports `--dry-run` and `--table=` flags
+- **FK filter fix** — `_id` and `is_` columns use exact `=` match in both `crud.service.ts` and `asset.service.ts`
 
 ---
 

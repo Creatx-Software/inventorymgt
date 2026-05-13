@@ -39,7 +39,7 @@ export const employeesRouter = buildCrudRouter({
     { table: 'departments', localKey: 'department_id', searchColumn: 'name' },
   ],
   allowedSortColumns: ['id', 'full_name', 'employee_code', 'created_at'],
-  allowedFilterColumns: ['full_name', 'employee_code', 'email', 'department_id', 'location_id'],
+  allowedFilterColumns: ['full_name', 'employee_code', 'email', 'department_id', 'location_id', 'is_active'],
   hasSoftDelete: true,
   defaultSort: { column: 'full_name', dir: 'asc' },
 });

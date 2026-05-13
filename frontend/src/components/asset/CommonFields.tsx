@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Wand2 } from 'lucide-react';
 import type { Vendor, Location, Department, Employee } from '../../types/api';
 import type { AssetStatus } from '../../types/assets';
 import { SearchableSelect } from '../ui/SearchableSelect';
@@ -96,12 +96,23 @@ export function CommonFields({
   const vendorName = vendors.find((v) => String(v.id) === value.vendor_id)?.name || '';
   const locationName = locations.find((l) => String(l.id) === value.location_id)?.name || '';
   const departmentName = departments.find((d) => String(d.id) === value.department_id)?.name || '';
-  const employeeDisplay = (() => {
-    const e = employees.find((e) => String(e.id) === value.employee_id);
-    if (!e) return '';
-    return e.employee_code ? `${e.full_name} (${e.employee_code})` : e.full_name;
-  })();
+  const selectedEmployee = employees.find((e) => String(e.id) === value.employee_id) ?? null;
+  const employeeDisplay = selectedEmployee
+    ? selectedEmployee.employee_code
+      ? `${selectedEmployee.full_name} (${selectedEmployee.employee_code})`
+      : selectedEmployee.full_name
+    : '';
   const statusName = statuses.find((s) => String(s.id) === value.status_id)?.name || '';
+
+  // True when the field value currently matches the selected employee's value (auto-filled)
+  const locationAutoFilled = !!(
+    selectedEmployee?.location_id &&
+    value.location_id === String(selectedEmployee.location_id)
+  );
+  const departmentAutoFilled = !!(
+    selectedEmployee?.department_id &&
+    value.department_id === String(selectedEmployee.department_id)
+  );
 
   return (
     <div className="grid grid-cols-2 gap-4">
@@ -146,7 +157,16 @@ export function CommonFields({
         <label className="label flex items-center">Employee (Assigned To) <CopyButton value={employeeDisplay} /></label>
         <SearchableSelect
           value={value.employee_id}
-          onChange={(v) => set('employee_id', v)}
+          onChange={(v) => {
+            const emp = employees.find((e) => String(e.id) === v) ?? null;
+            onChange({
+              ...value,
+              employee_id: v,
+              // Always auto-fill from employee; user can still override manually
+              department_id: emp?.department_id ? String(emp.department_id) : value.department_id,
+              location_id:   emp?.location_id   ? String(emp.location_id)   : value.location_id,
+            });
+          }}
           options={employees.map((e) => ({
             value: String(e.id),
             label: e.full_name,
@@ -157,7 +177,14 @@ export function CommonFields({
         />
       </div>
       <div>
-        <label className="label flex items-center">Location <CopyButton value={locationName} /></label>
+        <label className="label flex items-center">
+          Location <CopyButton value={locationName} />
+          {locationAutoFilled && (
+            <span className="ml-auto flex items-center gap-1 text-[10px] text-brand-500 font-medium">
+              <Wand2 className="w-3 h-3" /> from employee
+            </span>
+          )}
+        </label>
         <SearchableSelect
           value={value.location_id}
           onChange={(v) => set('location_id', v)}
@@ -165,7 +192,14 @@ export function CommonFields({
         />
       </div>
       <div>
-        <label className="label flex items-center">Department <CopyButton value={departmentName} /></label>
+        <label className="label flex items-center">
+          Department <CopyButton value={departmentName} />
+          {departmentAutoFilled && (
+            <span className="ml-auto flex items-center gap-1 text-[10px] text-brand-500 font-medium">
+              <Wand2 className="w-3 h-3" /> from employee
+            </span>
+          )}
+        </label>
         <SearchableSelect
           value={value.department_id}
           onChange={(v) => set('department_id', v)}

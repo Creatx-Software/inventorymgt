@@ -77,9 +77,11 @@ export class CrudService<T extends Record<string, any>> {
       }
       if (params.filters) {
         for (const [k, v] of Object.entries(params.filters)) {
-          if (!v) continue;
+          if (v === '' || v == null) continue;
           if (!this.opts.allowedFilterColumns.includes(k)) continue;
-          q.where(`${T}.${k}`, 'like', `%${v}%`);
+          // FK and boolean columns: exact match; text columns: substring match
+          if (k.endsWith('_id') || k.startsWith('is_')) q.where(`${T}.${k}`, v);
+          else q.where(`${T}.${k}`, 'like', `%${v}%`);
         }
       }
       return q;

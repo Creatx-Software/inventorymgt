@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { PackagePlus, ArrowDownToLine, UserPlus, RotateCcw, History } from 'lucide-react';
+import { PackagePlus, ArrowDownToLine, UserPlus, RotateCcw, History, Search, X } from 'lucide-react';
 import clsx from 'clsx';
 import { DataTable } from '../components/table/DataTable';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
@@ -67,7 +67,7 @@ export default function ConsumableStockPage() {
   );
 
   // ── Item form drawer (create / edit) ────────────────────────────────────────
-  const emptyForm = { name: '', category: '', description: '', vendor_id: '', location_id: '', unit: 'each', minimum_stock: '', po_number: '', invoice_number: '', remarks: '', initial_stock: '', initial_stock_date: todayISO(), initial_stock_reference: '' };
+  const emptyForm = { name: '', category: '', description: '', vendor_id: '', location_id: '', unit: 'each', minimum_stock: '', remarks: '', initial_stock: '', initial_stock_date: todayISO(), initial_stock_reference: '', initial_po_number: '', initial_invoice_number: '' };
   const [formOpen, setFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ConsumableItem | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
@@ -89,12 +89,12 @@ export default function ConsumableStockPage() {
       location_id: item.location_id?.toString() || '',
       unit: item.unit,
       minimum_stock: item.minimum_stock?.toString() || '',
-      po_number: item.po_number || '',
-      invoice_number: item.invoice_number || '',
       remarks: item.remarks || '',
       initial_stock: '',
       initial_stock_date: todayISO(),
       initial_stock_reference: '',
+      initial_po_number: '',
+      initial_invoice_number: '',
     });
     setFormOpen(true);
   };
@@ -110,8 +110,6 @@ export default function ConsumableStockPage() {
         location_id: form.location_id ? Number(form.location_id) : null,
         unit: form.unit.trim() || 'each',
         minimum_stock: form.minimum_stock !== '' ? Number(form.minimum_stock) : null,
-        po_number: form.po_number.trim() || null,
-        invoice_number: form.invoice_number.trim() || null,
         remarks: form.remarks.trim() || null,
       };
       // Only send initial stock fields on create
@@ -119,6 +117,8 @@ export default function ConsumableStockPage() {
         payload.initial_stock = Number(form.initial_stock);
         payload.initial_stock_date = form.initial_stock_date;
         payload.initial_stock_reference = form.initial_stock_reference.trim() || null;
+        payload.initial_po_number = form.initial_po_number.trim() || null;
+        payload.initial_invoice_number = form.initial_invoice_number.trim() || null;
       }
       if (editingItem) {
         await consumablesApi.update(editingItem.id, payload as any);
@@ -146,14 +146,14 @@ export default function ConsumableStockPage() {
   const [actionOpen, setActionOpen] = useState(false);
   const [actionItem, setActionItem] = useState<ConsumableItem | null>(null);
   const [actionType, setActionType] = useState<'stock_in' | 'assign' | 'return'>('stock_in');
-  const [actionForm, setActionForm] = useState({ quantity: '1', employee_id: '', transaction_date: todayISO(), reference_number: '', notes: '' });
+  const [actionForm, setActionForm] = useState({ quantity: '1', employee_id: '', transaction_date: todayISO(), reference_number: '', po_number: '', invoice_number: '', notes: '' });
   const [actioning, setActioning] = useState(false);
 
   const openAction = (item: ConsumableItem, type: 'stock_in' | 'assign' | 'return', e: React.MouseEvent) => {
     e.stopPropagation();
     setActionItem(item);
     setActionType(type);
-    setActionForm({ quantity: '1', employee_id: '', transaction_date: todayISO(), reference_number: '', notes: '' });
+    setActionForm({ quantity: '1', employee_id: '', transaction_date: todayISO(), reference_number: '', po_number: '', invoice_number: '', notes: '' });
     setActionOpen(true);
   };
 
@@ -169,6 +169,8 @@ export default function ConsumableStockPage() {
           quantity: qty,
           transaction_date: actionForm.transaction_date,
           reference_number: actionForm.reference_number || undefined,
+          po_number: actionForm.po_number || undefined,
+          invoice_number: actionForm.invoice_number || undefined,
           notes: actionForm.notes || undefined,
         });
       } else if (actionType === 'assign') {
@@ -204,11 +206,13 @@ export default function ConsumableStockPage() {
   const [transactions, setTransactions] = useState<ConsumableTransaction[]>([]);
   const [assignments, setAssignments] = useState<ConsumableAssignment[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
 
   const openHistory = async (item: ConsumableItem, e: React.MouseEvent) => {
     e.stopPropagation();
     setHistoryItem(item);
     setHistoryTab('transactions');
+    setHistorySearch('');
     setHistoryOpen(true);
     setHistoryLoading(true);
     try {
@@ -474,17 +478,6 @@ export default function ConsumableStockPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">PO Number</label>
-              <input className="input" value={form.po_number} onChange={(e) => setForm({ ...form, po_number: e.target.value })} />
-            </div>
-            <div>
-              <label className="label">Invoice Number</label>
-              <input className="input" value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} />
-            </div>
-          </div>
-
           <div>
             <label className="label">Remarks</label>
             <textarea
@@ -497,7 +490,7 @@ export default function ConsumableStockPage() {
           {/* Opening stock — create only */}
           {!editingItem && (
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-3">
-              <div className="text-sm font-semibold text-blue-800">Opening Stock</div>
+              <div className="text-sm font-semibold text-blue-800">Opening Stock <span className="font-normal text-blue-600/70">(optional)</span></div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Quantity</label>
@@ -519,15 +512,34 @@ export default function ConsumableStockPage() {
                     onChange={(e) => setForm({ ...form, initial_stock_date: e.target.value })}
                   />
                 </div>
+                <div>
+                  <label className="label">PO Number</label>
+                  <input
+                    className="input"
+                    value={form.initial_po_number}
+                    onChange={(e) => setForm({ ...form, initial_po_number: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label">Invoice Number</label>
+                  <input
+                    className="input"
+                    value={form.initial_invoice_number}
+                    onChange={(e) => setForm({ ...form, initial_invoice_number: e.target.value })}
+                  />
+                </div>
               </div>
               <div>
-                <label className="label">Reference (optional)</label>
+                <label className="label">Reference / Note (optional)</label>
                 <input
                   className="input"
                   value={form.initial_stock_reference}
                   onChange={(e) => setForm({ ...form, initial_stock_reference: e.target.value })}
-                  placeholder="PO number or delivery note"
+                  placeholder="Delivery note, courier ref, etc."
                 />
+              </div>
+              <div className="text-xs text-blue-700/70">
+                Leave quantity at 0 to create the item without any stock — you can add stock later.
               </div>
             </div>
           )}
@@ -610,15 +622,37 @@ export default function ConsumableStockPage() {
           )}
 
           {actionType === 'stock_in' && (
-            <div>
-              <label className="label">Reference / Delivery Note</label>
-              <input
-                className="input"
-                value={actionForm.reference_number}
-                onChange={(e) => setActionForm({ ...actionForm, reference_number: e.target.value })}
-                placeholder="PO number or delivery note"
-              />
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">PO Number</label>
+                  <input
+                    className="input"
+                    value={actionForm.po_number}
+                    onChange={(e) => setActionForm({ ...actionForm, po_number: e.target.value })}
+                    placeholder="e.g. PO/2024/045"
+                  />
+                </div>
+                <div>
+                  <label className="label">Invoice Number</label>
+                  <input
+                    className="input"
+                    value={actionForm.invoice_number}
+                    onChange={(e) => setActionForm({ ...actionForm, invoice_number: e.target.value })}
+                    placeholder="e.g. INV-2024-1234"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Reference / Note (optional)</label>
+                <input
+                  className="input"
+                  value={actionForm.reference_number}
+                  onChange={(e) => setActionForm({ ...actionForm, reference_number: e.target.value })}
+                  placeholder="Delivery note, courier ref, etc."
+                />
+              </div>
+            </>
           )}
 
           <div>
@@ -682,9 +716,76 @@ export default function ConsumableStockPage() {
         ) : historyTab === 'transactions' ? (
           transactions.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm">No transactions yet</div>
-          ) : (
-            <div className="space-y-2">
-              {transactions.map((tx) => (
+          ) : (() => {
+            const q = historySearch.trim().toLowerCase();
+            const filtered = q
+              ? transactions.filter((tx) =>
+                  (tx.po_number || '').toLowerCase().includes(q)
+                  || (tx.invoice_number || '').toLowerCase().includes(q)
+                  || (tx.reference_number || '').toLowerCase().includes(q),
+                )
+              : transactions;
+            const stockInQty = filtered
+              .filter((tx) => tx.transaction_type === 'stock_in')
+              .reduce((sum, tx) => sum + (tx.quantity || 0), 0);
+            const assignedQty = filtered
+              .filter((tx) => tx.transaction_type === 'assigned')
+              .reduce((sum, tx) => sum + (tx.quantity || 0), 0);
+            const returnedQty = filtered
+              .filter((tx) => tx.transaction_type === 'returned')
+              .reduce((sum, tx) => sum + (tx.quantity || 0), 0);
+            return (
+              <>
+                {/* Search */}
+                <div className="mb-3">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                    <input
+                      className="input pl-8 pr-8"
+                      placeholder="Filter by PO, Invoice or reference…"
+                      value={historySearch}
+                      onChange={(e) => setHistorySearch(e.target.value)}
+                    />
+                    {historySearch && (
+                      <button
+                        onClick={() => setHistorySearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                        title="Clear"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Search summary */}
+                {q && (
+                  <div className="mb-3 grid grid-cols-3 gap-2">
+                    <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-emerald-700">Stocked in</div>
+                      <div className="text-xl font-bold text-emerald-700">+{stockInQty}</div>
+                    </div>
+                    <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-amber-700">Assigned</div>
+                      <div className="text-xl font-bold text-amber-700">−{assignedQty}</div>
+                    </div>
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-blue-700">Returned</div>
+                      <div className="text-xl font-bold text-blue-700">+{returnedQty}</div>
+                    </div>
+                    <div className="col-span-3 text-xs text-slate-500">
+                      {filtered.length === 0
+                        ? <>No transactions match <strong className="text-slate-700">"{historySearch}"</strong></>
+                        : <>Showing <strong className="text-slate-700">{filtered.length}</strong> of {transactions.length} transactions matching <strong className="text-slate-700">"{historySearch}"</strong></>}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {filtered.length === 0 && !q && (
+                    <div className="text-center py-6 text-slate-400 text-sm">No transactions match the search.</div>
+                  )}
+                  {filtered.map((tx) => (
                 <div key={tx.id} className="flex items-start justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
@@ -697,10 +798,26 @@ export default function ConsumableStockPage() {
                         {tx.employee_code ? ` (${tx.employee_code})` : ''}
                       </div>
                     )}
-                    {tx.reference_number && (
-                      <div className="text-slate-500">Ref: {tx.reference_number}</div>
+                    {tx.transaction_type === 'stock_in' && (
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-600">
+                        <span>
+                          <span className="text-slate-400">PO:</span>{' '}
+                          {tx.po_number
+                            ? <span className="font-mono text-slate-900">{tx.po_number}</span>
+                            : <span className="text-slate-300">—</span>}
+                        </span>
+                        <span>
+                          <span className="text-slate-400">Invoice:</span>{' '}
+                          {tx.invoice_number
+                            ? <span className="font-mono text-slate-900">{tx.invoice_number}</span>
+                            : <span className="text-slate-300">—</span>}
+                        </span>
+                      </div>
                     )}
-                    {tx.notes && <div className="text-slate-500 italic">{tx.notes}</div>}
+                    {tx.reference_number && (
+                      <div className="text-slate-500 text-xs">Ref: {tx.reference_number}</div>
+                    )}
+                    {tx.notes && <div className="text-slate-500 text-xs italic">{tx.notes}</div>}
                   </div>
                   <div className="text-right text-slate-400 text-xs shrink-0 ml-4">
                     <div>{new Date(tx.transaction_date).toLocaleDateString('en-GB')}</div>
@@ -708,8 +825,10 @@ export default function ConsumableStockPage() {
                   </div>
                 </div>
               ))}
-            </div>
-          )
+                </div>
+              </>
+            );
+          })()
         ) : (
           assignments.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm">No items currently held by employees</div>

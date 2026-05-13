@@ -64,6 +64,15 @@ export default function EndpointsPage() {
         columns={columns}
         stickyColumnIds={['host_name']}
         defaultSorting={[{ id: 'host_name', desc: false }]}
+        extraFilterFields={[
+          { key: 'endpoint_type', label: 'Type', type: 'select', options: [
+            { value: 'Laptop',  label: 'Laptop'  },
+            { value: 'Desktop', label: 'Desktop' },
+            { value: 'Other',   label: 'Other'   },
+          ]},
+          { key: 'host_name',  label: 'Host Name',  type: 'text', placeholder: 'Filter by host…' },
+          { key: 'ip_address', label: 'IP Address',  type: 'text', placeholder: 'Filter by IP…'   },
+        ]}
         emptyExtra={empty}
         extraToPayload={(e) => ({
           endpoint_type: e.endpoint_type,
