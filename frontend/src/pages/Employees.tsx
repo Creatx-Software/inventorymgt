@@ -212,7 +212,7 @@ export default function EmployeesPage() {
   };
 
   return (
-    <>
+    <div className="space-y-3">
       {/* Active / Inactive filter tabs — same style as asset status tabs */}
       <div className="flex flex-wrap gap-2">
         <button
@@ -477,7 +477,7 @@ export default function EmployeesPage() {
           </div>
         )}
       </Drawer>
-    </>
+    </div>
   );
 }
 
