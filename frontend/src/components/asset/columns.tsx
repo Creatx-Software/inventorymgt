@@ -38,6 +38,13 @@ export function commonAssetColumns<T extends AssetCommon>(): ColumnDef<T, any>[]
     { accessorKey: 'po_number', header: 'PO #', size: 140, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'invoice_number', header: 'Invoice #', size: 140, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'sap_asset_code', header: 'SAP Code', size: 140, cell: (i) => i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
+    { accessorKey: 'remarks', header: 'Remarks', size: 220, enableSorting: false,
+      cell: (i) => {
+        const val = i.getValue() as string;
+        if (!val) return <span className="text-slate-300">—</span>;
+        return <span title={val} className="block truncate max-w-[200px]">{val}</span>;
+      },
+    },
     { accessorKey: 'created_at', header: 'Created', size: 110, cell: (i) => fmtDate(i.getValue() as string) },
   ];
 }
