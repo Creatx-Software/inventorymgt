@@ -18,6 +18,7 @@ import { rolesRouter } from './controllers/roles.controller';
 import { usersRouter } from './controllers/users.controller';
 import { approvalsRouter } from './controllers/approvals.controller';
 import { consumablesRouter } from './controllers/consumables.controller';
+import { notesRouter } from './controllers/notes.controller';
 import { lookupRelatedRouter } from './controllers/lookup-related.controller';
 import { notFound, errorHandler } from './middleware/error';
 
@@ -56,6 +57,7 @@ app.use(`${env.apiPrefix}/roles`, rolesRouter);
 app.use(`${env.apiPrefix}/users`, usersRouter);
 app.use(`${env.apiPrefix}/approvals`, approvalsRouter);
 app.use(`${env.apiPrefix}/consumables`, consumablesRouter);
+app.use(`${env.apiPrefix}/notes`, notesRouter);
 app.use(`${env.apiPrefix}`, lookupRelatedRouter);
 
 app.use(notFound);
