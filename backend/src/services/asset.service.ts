@@ -1,5 +1,4 @@
 import db from '../config/db';
-import { Knex } from 'knex';
 
 export type AssetTypeKey =
   | 'endpoint' | 'monitor' | 'mobile_device' | 'ip_phone'
@@ -50,7 +49,7 @@ export class AssetService {
 
   async list(params: ListParams) {
     const page = Math.max(1, Number(params.page || 1));
-    const pageSize = Math.min(500, Math.max(1, Number(params.pageSize || 100)));
+    const pageSize = Math.min(99999, Math.max(1, Number(params.pageSize || 100)));
     const offset = (page - 1) * pageSize;
 
     const T = this.opts.table;

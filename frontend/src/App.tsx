@@ -23,6 +23,7 @@ import RolesPage from './pages/RolesPage';
 import ApprovalsPage from './pages/ApprovalsPage';
 import WarrantyPage from './pages/WarrantyPage';
 import ConsumableStock from './pages/ConsumableStock';
+import NotesPage from './pages/NotesPage';
 
 export default function App() {
   return (
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/approvals"       element={<ApprovalsPage />} />
             <Route path="/warranty"          element={<WarrantyPage />} />
             <Route path="/consumables"       element={<ConsumableStock />} />
+            <Route path="/notes"             element={<NotesPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

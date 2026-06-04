@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import {
   useReactTable,
   getCoreRowModel,
@@ -157,7 +158,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
       const sort = sorting[0];
       const r = await fetcher({
         page,
-        pageSize,
+        pageSize: pageSize === 0 ? 99999 : pageSize,
         search: search || undefined,
         sortBy: sort?.id,
         sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
@@ -224,25 +225,26 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
     load();
   };
 
-  const exportCsv = () => {
+  const exportXlsx = () => {
     const visibleCols = table.getVisibleLeafColumns().filter((c) => c.id !== '__select__');
-    const header = visibleCols.map((c) => (typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id)).join(',');
+    const headers = visibleCols.map((c) => (typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id));
     const rows = data.map((row) =>
       visibleCols.map((col) => {
         const val = (row as any)[col.id];
-        if (val == null) return '';
-        const s = String(val).replace(/"/g, '""');
-        return /[",\n]/.test(s) ? `"${s}"` : s;
-      }).join(',')
+        return val == null ? '' : val;
+      })
     );
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${title.toLowerCase().replace(/\s+/g, '_')}_export.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, title.slice(0, 31));
+    const now = new Date();
+    const stamp = now.getFullYear().toString() +
+      String(now.getMonth() + 1).padStart(2, '0') +
+      String(now.getDate()).padStart(2, '0') + '_' +
+      String(now.getHours()).padStart(2, '0') +
+      String(now.getMinutes()).padStart(2, '0') +
+      String(now.getSeconds()).padStart(2, '0');
+    XLSX.writeFile(wb, `${title.toLowerCase().replace(/\s+/g, '_')}_${stamp}.xlsx`);
   };
 
   const stickyOffsets = useMemo(() => {
@@ -279,7 +281,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
             </button>
           )}
           {typeof extraActions === 'function' ? extraActions({ selectedIds }) : extraActions}
-          <button onClick={exportCsv} className="btn-secondary"><Download className="w-4 h-4" /> Export</button>
+          <button onClick={exportXlsx} className="btn-secondary"><Download className="w-4 h-4" /> Export</button>
           <button onClick={load} className="btn-secondary" title="Refresh"><RefreshCw className={clsx('w-4 h-4', loading && 'animate-spin')} /></button>
           <div className="relative">
             <button onClick={() => setShowColMenu(!showColMenu)} className="btn-secondary"><Settings2 className="w-4 h-4" /> Columns</button>
@@ -536,6 +538,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
               className="input py-1 text-sm w-auto"
             >
               {pageSizes.map((s) => <option key={s} value={s}>{s} / page</option>)}
+              <option value={0}>All</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
