@@ -227,13 +227,25 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
 
   const exportXlsx = () => {
     const visibleCols = table.getVisibleLeafColumns().filter((c) => c.id !== '__select__');
-    const headers = visibleCols.map((c) => (typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id));
-    const rows = data.map((row) =>
-      visibleCols.map((col) => {
+
+    // Build headers — inject "Employee ID" column right after "employee_name" if present
+    const headers: string[] = [];
+    for (const c of visibleCols) {
+      headers.push(typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id);
+      if (c.id === 'employee_name') headers.push('Employee ID');
+    }
+
+    const rows = data.map((row) => {
+      const cells: any[] = [];
+      for (const col of visibleCols) {
         const val = (row as any)[col.id];
-        return val == null ? '' : val;
-      })
-    );
+        cells.push(val == null ? '' : val);
+        if (col.id === 'employee_name') {
+          cells.push((row as any).employee_code ?? '');
+        }
+      }
+      return cells;
+    });
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, title.slice(0, 31));
