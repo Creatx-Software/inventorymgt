@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 import {
   useReactTable,
   getCoreRowModel,
@@ -228,25 +228,47 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
   const exportXlsx = () => {
     const visibleCols = table.getVisibleLeafColumns().filter((c) => c.id !== '__select__');
 
-    // Build headers — inject "Employee ID" column right after "employee_name" if present
-    const headers: string[] = [];
+    // Build column list — inject "Employee ID" after "employee_name" if present
+    const sheetCols: Array<{ label: string; key: string }> = [];
     for (const c of visibleCols) {
-      headers.push(typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id);
-      if (c.id === 'employee_name') headers.push('Employee ID');
+      sheetCols.push({ label: typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id, key: c.id });
+      if (c.id === 'employee_name') sheetCols.push({ label: 'Employee ID', key: '__emp_code__' });
     }
 
-    const rows = data.map((row) => {
-      const cells: any[] = [];
-      for (const col of visibleCols) {
-        const val = (row as any)[col.id];
-        cells.push(val == null ? '' : val);
-        if (col.id === 'employee_name') {
-          cells.push((row as any).employee_code ?? '');
-        }
-      }
-      return cells;
+    const HEADER_STYLE = {
+      fill: { patternType: 'solid', fgColor: { rgb: '1E3A8A' } },
+      font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11, name: 'Calibri' },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: false },
+      border: { bottom: { style: 'thin', color: { rgb: '3B82F6' } } },
+    };
+    const ROW_EVEN = { fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } }, font: { sz: 10, name: 'Calibri' }, alignment: { vertical: 'center' } };
+    const ROW_ODD  = { fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } }, font: { sz: 10, name: 'Calibri' }, alignment: { vertical: 'center' } };
+
+    const styledHeader = sheetCols.map((col) => ({ v: col.label, t: 's', s: HEADER_STYLE }));
+
+    const styledRows = data.map((row, ri) => {
+      const s = ri % 2 === 0 ? ROW_EVEN : ROW_ODD;
+      return sheetCols.map((col) => {
+        const val = col.key === '__emp_code__' ? ((row as any).employee_code ?? '') : ((row as any)[col.key] ?? '');
+        return { v: val === '' || val == null ? '' : val, t: typeof val === 'number' ? 'n' : 's', s };
+      });
     });
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+    const ws = XLSX.utils.aoa_to_sheet([styledHeader, ...styledRows]);
+
+    // Auto column widths
+    ws['!cols'] = sheetCols.map((col) => {
+      let max = col.label.length;
+      data.forEach((row) => {
+        const val = col.key === '__emp_code__' ? String((row as any).employee_code ?? '') : String((row as any)[col.key] ?? '');
+        if (val.length > max) max = val.length;
+      });
+      return { wch: Math.min(Math.max(max + 2, 10), 45) };
+    });
+
+    // Freeze header row
+    ws['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: 1, topLeftCell: 'A2' }];
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, title.slice(0, 31));
     const now = new Date();
