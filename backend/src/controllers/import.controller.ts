@@ -40,9 +40,11 @@ importRouter.post('/preview/:assetType', upload.single('file'), (req: AuthReques
 importRouter.post('/commit/:assetType', upload.single('file'), async (req: AuthRequest, res: Response) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const assetType = String(req.params.assetType);
-  const { sheetName, mapping, dryRun } = req.body;
+  const { sheetName, mapping, dryRun, duplicateMode } = req.body;
   if (!sheetName || !mapping) return res.status(400).json({ error: 'sheetName and mapping required' });
   const parsedMapping: Record<string, string | null> = typeof mapping === 'string' ? JSON.parse(mapping) : mapping;
+  const validModes = ['skip', 'update', 'only'];
+  const parsedMode = validModes.includes(duplicateMode) ? duplicateMode : 'skip';
 
   try {
     const result = await executeImport({
@@ -51,6 +53,7 @@ importRouter.post('/commit/:assetType', upload.single('file'), async (req: AuthR
       assetType,
       mapping: parsedMapping,
       dryRun: dryRun === 'true' || dryRun === true,
+      duplicateMode: parsedMode,
     });
     if (!(dryRun === 'true' || dryRun === true)) {
       await audit({

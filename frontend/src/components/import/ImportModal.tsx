@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
 import clsx from 'clsx';
-import { previewImport, commitImport, type ImportPreview, type ImportResult } from '../../api/import';
+import { previewImport, commitImport, type ImportPreview, type ImportResult, type DuplicateMode } from '../../api/import';
 import { SearchableSelect } from '../ui/SearchableSelect';
 
 type Step = 'upload' | 'mapping' | 'dryrun' | 'done';
@@ -20,6 +20,7 @@ export function ImportModal({
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [selectedSheet, setSelectedSheet] = useState<string>('');
   const [mapping, setMapping] = useState<Record<string, string | null>>({});
+  const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>('skip');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dryRunResult, setDryRunResult] = useState<ImportResult | null>(null);
@@ -27,7 +28,7 @@ export function ImportModal({
 
   const reset = () => {
     setStep('upload'); setFile(null); setPreview(null); setSelectedSheet('');
-    setMapping({}); setLoading(false); setError(''); setDryRunResult(null); setFinalResult(null);
+    setMapping({}); setDuplicateMode('skip'); setLoading(false); setError(''); setDryRunResult(null); setFinalResult(null);
   };
 
   const close = () => { reset(); onClose(); };
@@ -60,7 +61,9 @@ export function ImportModal({
     if (!file) return;
     setLoading(true); setError('');
     try {
-      const r = await commitImport({ assetType, file, sheetName: selectedSheet, mapping, dryRun: true });
+      // Always preview with 'skip' so the user sees baseline counts (new vs duplicates)
+      // before choosing how to handle them
+      const r = await commitImport({ assetType, file, sheetName: selectedSheet, mapping, dryRun: true, duplicateMode: 'skip' });
       setDryRunResult(r);
       setStep('dryrun');
     } catch (e: any) {
@@ -72,7 +75,7 @@ export function ImportModal({
     if (!file) return;
     setLoading(true); setError('');
     try {
-      const r = await commitImport({ assetType, file, sheetName: selectedSheet, mapping, dryRun: false });
+      const r = await commitImport({ assetType, file, sheetName: selectedSheet, mapping, dryRun: false, duplicateMode });
       setFinalResult(r);
       setStep('done');
       onSuccess();
@@ -202,15 +205,17 @@ export function ImportModal({
 
           {step === 'dryrun' && dryRunResult && (
             <div className="space-y-4">
+              {/* Baseline counts (always from skip-mode dry run) */}
               <div className="grid grid-cols-4 gap-4">
                 <div className="card p-4">
-                  <div className="text-xs font-medium text-slate-500 uppercase">Will insert</div>
+                  <div className="text-xs font-medium text-slate-500 uppercase">New records</div>
                   <div className="text-3xl font-bold text-emerald-600 mt-1">{dryRunResult.inserted}</div>
+                  <div className="text-[10px] text-slate-400 mt-1">Will be inserted</div>
                 </div>
                 <div className="card p-4">
                   <div className="text-xs font-medium text-slate-500 uppercase">Duplicates</div>
                   <div className="text-3xl font-bold text-amber-600 mt-1">{dryRunResult.duplicates}</div>
-                  <div className="text-[10px] text-slate-400 mt-1">Same serial skipped</div>
+                  <div className="text-[10px] text-slate-400 mt-1">Serial already exists</div>
                 </div>
                 <div className="card p-4">
                   <div className="text-xs font-medium text-slate-500 uppercase">Empty rows</div>
@@ -225,7 +230,7 @@ export function ImportModal({
               {dryRunResult.errors.length > 0 && (
                 <div className="card p-4">
                   <div className="text-sm font-semibold text-slate-900 mb-2">Errors:</div>
-                  <div className="max-h-64 overflow-y-auto space-y-1 text-xs font-mono">
+                  <div className="max-h-48 overflow-y-auto space-y-1 text-xs font-mono">
                     {dryRunResult.errors.slice(0, 100).map((e, i) => (
                       <div key={i} className="text-red-600">Row {e.row}: {e.error}</div>
                     ))}
@@ -236,8 +241,54 @@ export function ImportModal({
                 </div>
               )}
 
+              {/* Duplicate handling — only show if there are any duplicates */}
+              {dryRunResult.duplicates > 0 && (
+                <div className="card p-4 space-y-2">
+                  <div className="text-sm font-medium text-slate-700 mb-1">
+                    How should the <span className="text-amber-600 font-semibold">{dryRunResult.duplicates} duplicate{dryRunResult.duplicates !== 1 ? 's' : ''}</span> be handled?
+                  </div>
+                  {(
+                    [
+                      {
+                        value: 'skip' as DuplicateMode,
+                        label: 'Skip duplicates',
+                        desc: `Leave existing records unchanged. Only the ${dryRunResult.inserted} new records will be added.`,
+                      },
+                      {
+                        value: 'update' as DuplicateMode,
+                        label: 'Import with updates',
+                        desc: `Add ${dryRunResult.inserted} new records and overwrite the ${dryRunResult.duplicates} existing records with the data from this file.`,
+                      },
+                      {
+                        value: 'only' as DuplicateMode,
+                        label: 'Update duplicates only',
+                        desc: `Only overwrite the ${dryRunResult.duplicates} existing records. The ${dryRunResult.inserted} new records will be skipped.`,
+                      },
+                    ]
+                  ).map((opt) => (
+                    <label key={opt.value} className={clsx(
+                      'flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition',
+                      duplicateMode === opt.value ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300',
+                    )}>
+                      <input
+                        type="radio"
+                        name="duplicateMode"
+                        value={opt.value}
+                        checked={duplicateMode === opt.value}
+                        onChange={() => setDuplicateMode(opt.value)}
+                        className="mt-0.5 accent-brand-600"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-slate-800">{opt.label}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">{opt.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+
               <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-                <strong>This is a dry run.</strong> Nothing has been saved yet. Click "Run import" to commit.
+                <strong>Nothing has been saved yet.</strong> Review the counts above, choose how to handle duplicates, then click "Run import".
               </div>
             </div>
           )}
@@ -248,11 +299,22 @@ export function ImportModal({
                 <CheckCircle2 className="w-9 h-9 text-emerald-600" />
               </div>
               <div className="text-xl font-semibold text-slate-900">Import complete</div>
-              <div className="text-sm text-slate-500 mt-2">
-                <strong className="text-emerald-600">{finalResult.inserted}</strong> inserted ·{' '}
-                <strong className="text-amber-600">{finalResult.duplicates}</strong> duplicates ·{' '}
-                <strong className="text-slate-600">{finalResult.skipped}</strong> empty ·{' '}
-                <strong className="text-red-600">{finalResult.errors.length}</strong> errors
+              <div className="text-sm text-slate-500 mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
+                {finalResult.inserted > 0 && (
+                  <span><strong className="text-emerald-600">{finalResult.inserted}</strong> inserted</span>
+                )}
+                {finalResult.updated > 0 && (
+                  <span><strong className="text-blue-600">{finalResult.updated}</strong> updated</span>
+                )}
+                {finalResult.duplicates > 0 && (
+                  <span><strong className="text-amber-600">{finalResult.duplicates}</strong> duplicates skipped</span>
+                )}
+                {finalResult.skipped > 0 && (
+                  <span><strong className="text-slate-600">{finalResult.skipped}</strong> skipped</span>
+                )}
+                {finalResult.errors.length > 0 && (
+                  <span><strong className="text-red-600">{finalResult.errors.length}</strong> errors</span>
+                )}
               </div>
             </div>
           )}

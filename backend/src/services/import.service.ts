@@ -235,8 +235,11 @@ async function generatePlaceholderSerial(trx: any, assetType: string): Promise<s
   return `${prefix}${String(next).padStart(5, '0')}`;
 }
 
+export type DuplicateMode = 'skip' | 'update' | 'only';
+
 export interface ImportResult {
   inserted: number;
+  updated: number;
   skipped: number;
   duplicates: number;
   errors: { row: number; error: string }[];
@@ -245,6 +248,10 @@ export interface ImportResult {
 /**
  * Run an import. mapping: Excel header → field key (or null to skip).
  * dryRun = preview only, rolls back at the end.
+ * duplicateMode:
+ *   'skip'   — skip rows whose serial already exists (default)
+ *   'update' — insert new rows AND update existing rows with Excel data
+ *   'only'   — only update existing rows; skip rows with new serials
  */
 export async function executeImport(args: {
   buffer: Buffer;
@@ -252,6 +259,7 @@ export async function executeImport(args: {
   assetType: string;
   mapping: Record<string, string | null>;
   dryRun: boolean;
+  duplicateMode?: DuplicateMode;
 }): Promise<ImportResult> {
   const wb = XLSX.read(args.buffer, { type: 'buffer' });
   const ws = wb.Sheets[args.sheetName];
@@ -263,7 +271,8 @@ export async function executeImport(args: {
   const fieldByKey = new Map(fields.map((f) => [f.key, f]));
   const table = ASSET_TYPE_TO_TABLE[args.assetType];
 
-  const result: ImportResult = { inserted: 0, skipped: 0, duplicates: 0, errors: [] };
+  const result: ImportResult = { inserted: 0, updated: 0, skipped: 0, duplicates: 0, errors: [] };
+  const mode: DuplicateMode = args.duplicateMode || 'skip';
 
   await db.transaction(async (trx) => {
     for (let i = 0; i < rows.length; i++) {
@@ -301,20 +310,56 @@ export async function executeImport(args: {
           data.status_id = await getStatusId(trx, null);
         }
 
-        // Handle serial
+        // Handle serial + duplicate mode
         let serial = normVal(data.serial_number);
+
         if (!serial) {
+          if (mode === 'only') {
+            // No serial → cannot match an existing record
+            result.skipped++;
+            continue;
+          }
           serial = await generatePlaceholderSerial(trx, args.assetType);
         } else {
           const dup = await trx('serial_registry').where({ serial_number: serial }).first();
           if (dup) {
-            // Already in registry (either prior import or earlier row in same file) — skip silently
-            result.duplicates++;
+            if (mode === 'skip') {
+              result.duplicates++;
+              continue;
+            }
+            // 'update' or 'only': update the existing asset row
+            if (dup.asset_type !== args.assetType) {
+              result.errors.push({ row: i + 2, error: `Serial "${serial}" belongs to a different asset type (${dup.asset_type})` });
+              continue;
+            }
+            const updateData = { ...data };
+            delete updateData.serial_number;
+            const existingAsset = await trx(table).where({ id: dup.asset_id }).first();
+            await trx(table).where({ id: dup.asset_id }).update({ ...updateData, updated_at: new Date() });
+            result.updated++;
+            // Re-open assignment if employee changed
+            if (data.employee_id && existingAsset?.employee_id !== data.employee_id) {
+              await trx('asset_assignments')
+                .where({ asset_type: args.assetType, asset_id: dup.asset_id, returned_date: null })
+                .update({ returned_date: new Date() });
+              await trx('asset_assignments').insert({
+                asset_type: args.assetType,
+                asset_id: dup.asset_id,
+                employee_id: data.employee_id,
+                assigned_date: new Date(),
+                notes: 'Updated via Excel import',
+              });
+            }
+            continue;
+          } else if (mode === 'only') {
+            // Serial not found in registry and mode is 'only' → skip new records
+            result.skipped++;
             continue;
           }
         }
-        data.serial_number = serial;
 
+        // Insert new record
+        data.serial_number = serial;
         const [id] = await trx(table).insert(data);
         await trx('serial_registry').insert({
           serial_number: serial,
