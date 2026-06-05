@@ -20,8 +20,11 @@ export interface ImportPreview {
   fields: ImportField[];
 }
 
+export type DuplicateMode = 'skip' | 'update' | 'only';
+
 export interface ImportResult {
   inserted: number;
+  updated: number;
   skipped: number;
   duplicates: number;
   errors: { row: number; error: string }[];
@@ -42,12 +45,14 @@ export async function commitImport(args: {
   sheetName: string;
   mapping: Record<string, string | null>;
   dryRun: boolean;
+  duplicateMode?: DuplicateMode;
 }): Promise<ImportResult> {
   const fd = new FormData();
   fd.append('file', args.file);
   fd.append('sheetName', args.sheetName);
   fd.append('mapping', JSON.stringify(args.mapping));
   fd.append('dryRun', String(args.dryRun));
+  fd.append('duplicateMode', args.duplicateMode || 'skip');
   const r = await api.post(`/import/commit/${args.assetType}`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
