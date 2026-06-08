@@ -169,8 +169,10 @@ System roles seeded: **superadmin** (all permissions), **admin** (all except `ro
 | UNIQUE(role_id, permission) | | |
 
 Permission key format: `{resource}_{action}` where action is `view`, `create`, `edit`, or `delete`.
-Resources: `dashboard`, `endpoints`, `monitors`, `mobile_devices`, `ip_phones`, `servers`, `printers`, `network_devices`, `other_assets`, `incidents`, `employees`, `departments`, `locations`, `vendors`, `audit_logs`, `consumables`.
+Resources: `dashboard`, `endpoints`, `monitors`, `mobile_devices`, `ip_phones`, `servers`, `printers`, `network_devices`, `other_assets`, `incidents`, `employees`, `departments`, `locations`, `vendors`, `audit_logs`, `consumables`, `notes`, `activities`.
 Special: `users_manage`, `roles_manage`.
+Notes actions: `view`, `create`, `delete` (no edit — notes are immutable after creation).
+Activities actions: `view`, `create`, `edit`, `delete`.
 
 #### `employees` (asset owners — NOT login users)
 | Column | Type | Notes |
@@ -339,21 +341,26 @@ updated_at      TIMESTAMP
 | Column | Type | Notes |
 |---|---|---|
 | id | INT PK | |
-| incident_code | VARCHAR(100) | |
-| start_datetime | DATETIME | |
-| end_datetime | DATETIME NULL | |
-| application_impacted | VARCHAR(255) | |
-| can_id | VARCHAR(100) NULL | |
-| problem_statement | TEXT | |
-| impact_assessment | TEXT | |
-| business_impact | TEXT | |
-| observations | TEXT | |
-| teams_involved | TEXT | |
-| ips_impacted | TEXT | |
+| date | DATE NULL | Incident date (UI label: "Date") |
+| incident_code | VARCHAR(100) NULL | UI label: "Incident Number" |
+| start_datetime | DATETIME NULL | Time stored via date + start time inputs |
+| end_datetime | DATETIME NULL | Time stored via date + end time inputs |
+| application_impacted | VARCHAR(255) NULL | UI label: "Application Name" |
+| problem_statement | TEXT NULL | UI label: "Description" |
+| sn_call_number | VARCHAR(100) NULL | UI label: "SN / Call Number" |
+| raised_by_employee_id | INT FK → employees.id NULL | Employee dropdown; ON DELETE SET NULL |
+| email_attachment_name | VARCHAR(255) NULL | Original .msg filename |
+| email_attachment_data | LONGBLOB NULL | Binary .msg file content |
+| can_id | VARCHAR(100) NULL | Legacy — kept for existing data |
+| impact_assessment | TEXT NULL | Legacy — kept for existing data |
+| business_impact | TEXT NULL | Legacy — kept for existing data |
+| observations | TEXT NULL | Legacy — kept for existing data |
+| teams_involved | TEXT NULL | Legacy — kept for existing data |
+| ips_impacted | TEXT NULL | Legacy — kept for existing data |
 | created_at, updated_at | TIMESTAMP | |
 | deleted_at | TIMESTAMP NULL | |
 
-#### `incident_servers` / `incident_network_devices` (junction tables)
+#### `incident_servers` / `incident_network_devices` (junction tables — legacy, kept for existing data)
 
 #### `audit_logs`
 | Column | Type | Notes |
@@ -545,6 +552,8 @@ POST   /api/approvals/:id/reject   # reject — restores before_data to asset (s
 | `/roles` | Roles & Permissions | `roles_manage` or superadmin |
 | `/approvals` | Pending Approvals | superadmin only |
 | `/consumables` | Consumable Stock | `consumables_view` |
+| `/notes` | Notes | `notes_view` |
+| `/activities` | Activities | `activities_view` |
 
 Sidebar items are filtered automatically based on the logged-in user's permissions.
 

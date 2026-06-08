@@ -1,136 +1,182 @@
 import { Router, Response } from 'express';
+import multer from 'multer';
 import db from '../config/db';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit.service';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.originalname.toLowerCase().endsWith('.msg')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only .msg files are allowed'));
+    }
+  },
+});
 
 export const incidentsRouter = Router();
 incidentsRouter.use(authMiddleware);
 
-interface ListParams {
-  page: number;
-  pageSize: number;
-  search?: string;
-  sortBy: string;
-  sortDir: 'asc' | 'desc';
+const ALLOWED_SORT = ['id', 'date', 'incident_code', 'start_datetime', 'end_datetime', 'application_impacted', 'created_at'];
+
+const SELECT_COLS = [
+  'n.id', 'n.date', 'n.incident_code', 'n.start_datetime', 'n.end_datetime',
+  'n.application_impacted', 'n.problem_statement',
+  'n.sn_call_number', 'n.raised_by_employee_id',
+  'n.email_attachment_name', 'n.deleted_at', 'n.created_at', 'n.updated_at',
+  'emp.full_name as raised_by_name',
+  db.raw('CASE WHEN n.email_attachment_data IS NOT NULL THEN 1 ELSE 0 END as has_attachment'),
+];
+
+function baseQ() {
+  return db('network_incidents as n')
+    .leftJoin('employees as emp', 'n.raised_by_employee_id', 'emp.id');
 }
 
-incidentsRouter.get('/', async (req: AuthRequest, res: Response) => {
-  const page = Math.max(1, Number(req.query.page || 1));
+// GET /api/incidents
+incidentsRouter.get('/', requirePermission('incidents_view'), async (req: AuthRequest, res: Response) => {
+  const page     = Math.max(1, Number(req.query.page || 1));
   const pageSize = Math.min(500, Math.max(1, Number(req.query.pageSize || 100)));
-  const offset = (page - 1) * pageSize;
-  const search = req.query.search as string | undefined;
-  const sortBy = (req.query.sortBy as string) || 'start_datetime';
-  const sortDir = req.query.sortDir === 'asc' ? 'asc' : 'desc';
-  const allowedSort = ['id', 'incident_code', 'start_datetime', 'end_datetime', 'application_impacted', 'created_at'];
-  const sort = allowedSort.includes(sortBy) ? sortBy : 'start_datetime';
+  const offset   = (page - 1) * pageSize;
+  const search   = String(req.query.search || '');
+  const sortKey  = String(req.query.sortBy || 'date');
+  const sortDir  = req.query.sortDir === 'asc' ? 'asc' : ('desc' as const);
+  const sort     = ALLOWED_SORT.includes(sortKey) ? `n.${sortKey}` : 'n.date';
 
-  const buildWhere = (q: any) => {
-    q.whereNull('deleted_at');
+  const applyWhere = (q: ReturnType<typeof baseQ>) => {
+    q.whereNull('n.deleted_at');
     if (search) {
-      const term = `%${search}%`;
-      q.where((sub: any) => {
-        sub.where('incident_code', 'like', term)
-          .orWhere('application_impacted', 'like', term)
-          .orWhere('can_id', 'like', term)
-          .orWhere('problem_statement', 'like', term)
-          .orWhere('business_impact', 'like', term);
+      const like = `%${search}%`;
+      q.where((sub) => {
+        sub.where('n.incident_code', 'like', like)
+          .orWhere('n.application_impacted', 'like', like)
+          .orWhere('n.sn_call_number', 'like', like)
+          .orWhere('n.problem_statement', 'like', like)
+          .orWhere('emp.full_name', 'like', like);
       });
     }
     return q;
   };
 
-  const [rows, countRows] = await Promise.all([
-    buildWhere(db('network_incidents').select('*')).orderBy(sort, sortDir).limit(pageSize).offset(offset),
-    (buildWhere(db('network_incidents')) as any).count('* as total') as Promise<{ total: number }[]>,
+  const [rows, [{ total }]] = await Promise.all([
+    applyWhere(baseQ().select(...SELECT_COLS))
+      .orderBy(sort, sortDir)
+      .limit(pageSize)
+      .offset(offset),
+    applyWhere(baseQ()).countDistinct<{ total: number }[]>('n.id as total'),
   ]);
 
   res.json({
     data: rows,
-    pagination: {
-      page, pageSize,
-      total: Number(countRows[0].total),
-      totalPages: Math.ceil(Number(countRows[0].total) / pageSize),
-    },
+    pagination: { page, pageSize, total: Number(total), totalPages: Math.ceil(Number(total) / pageSize) },
   });
 });
 
-incidentsRouter.get('/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  const incident = await db('network_incidents').where({ id }).whereNull('deleted_at').first();
-  if (!incident) return res.status(404).json({ error: 'Not found' });
-
-  const servers = await db('incident_servers')
-    .join('servers', 'incident_servers.server_id', 'servers.id')
-    .where('incident_servers.incident_id', id)
-    .select('servers.id', 'servers.serial_number', 'servers.application_name', 'servers.host_name');
-
-  const devices = await db('incident_network_devices')
-    .join('network_devices', 'incident_network_devices.network_device_id', 'network_devices.id')
-    .where('incident_network_devices.incident_id', id)
-    .select('network_devices.id', 'network_devices.serial_number', 'network_devices.device_name', 'network_devices.host_name');
-
-  res.json({ ...incident, servers, network_devices: devices });
+// GET /api/incidents/:id
+incidentsRouter.get('/:id', requirePermission('incidents_view'), async (req: AuthRequest, res: Response) => {
+  const row = await baseQ()
+    .select(...SELECT_COLS)
+    .where('n.id', req.params.id)
+    .whereNull('n.deleted_at')
+    .first();
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  res.json(row);
 });
 
-incidentsRouter.post('/', async (req: AuthRequest, res) => {
-  const { server_ids, network_device_ids, ...body } = req.body || {};
-  try {
-    const id = await db.transaction(async (trx) => {
-      const [newId] = await trx('network_incidents').insert(body);
-      if (Array.isArray(server_ids) && server_ids.length > 0) {
-        await trx('incident_servers').insert(server_ids.map((sid: number) => ({ incident_id: newId, server_id: sid })));
-      }
-      if (Array.isArray(network_device_ids) && network_device_ids.length > 0) {
-        await trx('incident_network_devices').insert(network_device_ids.map((did: number) => ({ incident_id: newId, network_device_id: did })));
-      }
-      return newId;
+// POST /api/incidents
+incidentsRouter.post(
+  '/',
+  requirePermission('incidents_create'),
+  upload.single('email_attachment'),
+  async (req: AuthRequest, res: Response) => {
+    const { date, start_datetime, end_datetime, incident_code, application_impacted,
+            problem_statement, sn_call_number, raised_by_employee_id } = req.body as Record<string, string>;
+
+    const [id] = await db('network_incidents').insert({
+      date:                 date || null,
+      start_datetime:       start_datetime || null,
+      end_datetime:         end_datetime   || null,
+      incident_code:        incident_code?.trim()        || null,
+      application_impacted: application_impacted?.trim() || null,
+      problem_statement:    problem_statement?.trim()    || null,
+      sn_call_number:       sn_call_number?.trim()       || null,
+      raised_by_employee_id: raised_by_employee_id ? Number(raised_by_employee_id) : null,
+      email_attachment_name: req.file?.originalname ?? null,
+      email_attachment_data: req.file?.buffer       ?? null,
     });
+
     await audit({ userId: req.user!.id, action: 'CREATE', entityType: 'incident', entityId: id, changes: req.body, ipAddress: req.ip });
-    const row = await db('network_incidents').where({ id }).first();
+    const row = await baseQ().select(...SELECT_COLS).where('n.id', id).first();
     res.status(201).json(row);
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
-});
+  },
+);
 
-incidentsRouter.put('/:id', async (req: AuthRequest, res) => {
-  const id = Number(req.params.id);
-  const { server_ids, network_device_ids, ...body } = req.body || {};
-  try {
-    await db.transaction(async (trx) => {
-      await trx('network_incidents').where({ id }).update({ ...body, updated_at: trx.fn.now() });
-      if (Array.isArray(server_ids)) {
-        await trx('incident_servers').where({ incident_id: id }).delete();
-        if (server_ids.length > 0) {
-          await trx('incident_servers').insert(server_ids.map((sid: number) => ({ incident_id: id, server_id: sid })));
-        }
-      }
-      if (Array.isArray(network_device_ids)) {
-        await trx('incident_network_devices').where({ incident_id: id }).delete();
-        if (network_device_ids.length > 0) {
-          await trx('incident_network_devices').insert(network_device_ids.map((did: number) => ({ incident_id: id, network_device_id: did })));
-        }
-      }
-    });
-    await audit({ userId: req.user!.id, action: 'UPDATE', entityType: 'incident', entityId: id, changes: req.body, ipAddress: req.ip });
-    const row = await db('network_incidents').where({ id }).first();
+// PUT /api/incidents/:id
+incidentsRouter.put(
+  '/:id',
+  requirePermission('incidents_edit'),
+  upload.single('email_attachment'),
+  async (req: AuthRequest, res: Response) => {
+    const existing = await db('network_incidents').where('id', req.params.id).whereNull('deleted_at').first();
+    if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+
+    const { date, start_datetime, end_datetime, incident_code, application_impacted,
+            problem_statement, sn_call_number, raised_by_employee_id, remove_attachment } = req.body as Record<string, string>;
+
+    const patch: Record<string, unknown> = {
+      date:                 date || null,
+      start_datetime:       start_datetime || null,
+      end_datetime:         end_datetime   || null,
+      incident_code:        incident_code?.trim()        || null,
+      application_impacted: application_impacted?.trim() || null,
+      problem_statement:    problem_statement?.trim()    || null,
+      sn_call_number:       sn_call_number?.trim()       || null,
+      raised_by_employee_id: raised_by_employee_id ? Number(raised_by_employee_id) : null,
+      updated_at: db.fn.now(),
+    };
+
+    if (req.file) {
+      patch.email_attachment_name = req.file.originalname;
+      patch.email_attachment_data = req.file.buffer;
+    } else if (remove_attachment === '1') {
+      patch.email_attachment_name = null;
+      patch.email_attachment_data = null;
+    }
+
+    await db('network_incidents').where('id', req.params.id).update(patch);
+    await audit({ userId: req.user!.id, action: 'UPDATE', entityType: 'incident', entityId: Number(req.params.id), changes: req.body, ipAddress: req.ip });
+    const row = await baseQ().select(...SELECT_COLS).where('n.id', req.params.id).first();
     res.json(row);
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
-});
+  },
+);
 
-incidentsRouter.delete('/:id', async (req: AuthRequest, res) => {
+// DELETE /api/incidents/:id
+incidentsRouter.delete('/:id', requirePermission('incidents_delete'), async (req: AuthRequest, res: Response) => {
   const id = Number(req.params.id);
   await db('network_incidents').where({ id }).update({ deleted_at: db.fn.now() });
   await audit({ userId: req.user!.id, action: 'DELETE', entityType: 'incident', entityId: id, ipAddress: req.ip });
   res.json({ success: true });
 });
 
-incidentsRouter.post('/bulk-delete', async (req: AuthRequest, res) => {
+// POST /api/incidents/bulk-delete
+incidentsRouter.post('/bulk-delete', requirePermission('incidents_delete'), async (req: AuthRequest, res: Response) => {
   const ids: number[] = req.body?.ids || [];
-  if (!ids.length) return res.json({ deleted: 0 });
+  if (!ids.length) { res.json({ deleted: 0 }); return; }
   const n = await db('network_incidents').whereIn('id', ids).update({ deleted_at: db.fn.now() });
   await audit({ userId: req.user!.id, action: 'DELETE', entityType: 'incident', changes: { ids }, ipAddress: req.ip });
   res.json({ deleted: n });
+});
+
+// GET /api/incidents/:id/attachment
+incidentsRouter.get('/:id/attachment', requirePermission('incidents_view'), async (req: AuthRequest, res: Response) => {
+  const row = await db('network_incidents')
+    .select('email_attachment_name', 'email_attachment_data')
+    .where('id', req.params.id)
+    .first();
+  if (!row || !row.email_attachment_data) { res.status(404).json({ error: 'Attachment not found' }); return; }
+  res.setHeader('Content-Disposition', `attachment; filename="${row.email_attachment_name}"`);
+  res.setHeader('Content-Type', 'application/vnd.ms-outlook');
+  res.send(row.email_attachment_data);
 });

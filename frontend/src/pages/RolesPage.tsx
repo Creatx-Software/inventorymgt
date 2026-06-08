@@ -38,6 +38,8 @@ const PERM_CATEGORIES: PermCategory[] = [
   { label: 'Locations',        resource: 'locations',       actions: ['view', 'create', 'edit', 'delete'] },
   { label: 'Vendors',          resource: 'vendors',         actions: ['view', 'create', 'edit', 'delete'] },
   { label: 'Consumable Stock', resource: 'consumables',     actions: ['view', 'create', 'edit', 'delete'] },
+  { label: 'Notes',           resource: 'notes',            actions: ['view', 'create', 'delete'] as Action[] },
+  { label: 'Activities',      resource: 'activities',       actions: ['view', 'create', 'edit', 'delete'] },
   { label: 'Audit Logs',       resource: 'audit_logs',      actions: ['view'] },
   {
     label: 'User Management',
