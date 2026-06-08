@@ -10,7 +10,7 @@ import {
  * `kind` controls how raw cell values are coerced/looked up before insert.
  */
 export type FieldKind =
-  | 'text' | 'number' | 'date' | 'bool'
+  | 'text' | 'number' | 'date' | 'bool' | 'time_text' | 'employee_lookup'
   | 'vendor' | 'location' | 'department' | 'employee_name' | 'employee_code' | 'status'
   | 'enum_endpoint_type' | 'enum_app_tier' | 'enum_server_class' | 'enum_server_type' | 'enum_environment';
 
@@ -149,7 +149,7 @@ export function parseExcelPreview(buffer: Buffer) {
  * Suggest mapping: for each Excel header, find the best matching field.
  */
 export function suggestMapping(headers: string[], assetType: string): Record<string, string | null> {
-  const fields = ASSET_FIELDS[assetType] || [];
+  const fields = ASSET_FIELDS[assetType] || SIMPLE_FIELDS[assetType] || [];
   const mapping: Record<string, string | null> = {};
   const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
@@ -384,6 +384,143 @@ export async function executeImport(args: {
     if (args.dryRun) {
       throw new Error('__DRY_RUN__');
     }
+  }).catch((e: any) => {
+    if (e.message !== '__DRY_RUN__') throw e;
+  });
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Simple (non-asset) import — for incidents and activities
+// ---------------------------------------------------------------------------
+
+export const SIMPLE_FIELDS: Record<string, FieldDef[]> = {
+  incidents: [
+    { key: 'date',                label: 'Date',              kind: 'date',            aliases: ['date'] },
+    { key: 'start_time',          label: 'Start Time',        kind: 'time_text',       aliases: ['start', 'start time', 'time from'] },
+    { key: 'end_time',            label: 'End Time',          kind: 'time_text',       aliases: ['end', 'end time', 'time to'] },
+    { key: 'incident_code',       label: 'Incident Number',   kind: 'text',            aliases: ['code', 'incident', 'number', 'ref'] },
+    { key: 'application_impacted',label: 'Application Name',  kind: 'text',            aliases: ['application', 'app', 'application name'] },
+    { key: 'problem_statement',   label: 'Description',       kind: 'text',            aliases: ['description', 'problem', 'details'] },
+    { key: 'sn_call_number',      label: 'SN / Call Number',  kind: 'text',            aliases: ['sn', 'call number', 'ticket', 'call no'] },
+    { key: 'raised_by',           label: 'Raised By',         kind: 'employee_lookup', aliases: ['raised by', 'raised', 'by', 'reporter'] },
+  ],
+  activities: [
+    { key: 'date',          label: 'Date',             kind: 'date',            aliases: ['date'] },
+    { key: 'sub_category',  label: 'Sub Category',     kind: 'text',            aliases: ['category', 'sub cat', 'sub_category'] },
+    { key: 'ip_address',    label: 'IP Address',       kind: 'text',            aliases: ['ip', 'ip address'] },
+    { key: 'device',        label: 'Device',           kind: 'text',            aliases: ['device', 'server', 'switch'] },
+    { key: 'sn_call_number',label: 'SN / Call Number', kind: 'text',            aliases: ['sn', 'call number', 'ticket', 'call no'] },
+    { key: 'raised_by',     label: 'Raised By',        kind: 'employee_lookup', aliases: ['raised by', 'raised', 'by', 'reporter'] },
+    { key: 'description',   label: 'Description',      kind: 'text',            aliases: ['description', 'details', 'notes'] },
+  ],
+};
+
+function parseTimeText(raw: any): string | null {
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'number') {
+    const totalSeconds = Math.round(raw * 86400);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  const str = String(raw).trim();
+  const match = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (match) {
+    return `${String(parseInt(match[1])).padStart(2, '0')}:${match[2]}:${match[3] ?? '00'}`;
+  }
+  return null;
+}
+
+function parseDateToString(raw: any): string | null {
+  const d = parseDate(raw);
+  if (!d) return null;
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${day}`;
+}
+
+export async function executeSimpleImport(args: {
+  buffer: Buffer;
+  sheetName: string;
+  tableType: 'incidents' | 'activities';
+  mapping: Record<string, string | null>;
+  dryRun: boolean;
+  userId: number;
+}): Promise<ImportResult> {
+  const wb = XLSX.read(args.buffer, { type: 'buffer' });
+  const ws = wb.Sheets[args.sheetName];
+  if (!ws) throw new Error(`Sheet "${args.sheetName}" not found`);
+  const rows = XLSX.utils.sheet_to_json<any>(ws, { defval: null });
+
+  const fields = SIMPLE_FIELDS[args.tableType];
+  if (!fields) throw new Error(`Unknown table type: ${args.tableType}`);
+  const fieldByKey = new Map(fields.map((f) => [f.key, f]));
+  const table = args.tableType === 'incidents' ? 'network_incidents' : 'activities';
+
+  const result: ImportResult = { inserted: 0, updated: 0, skipped: 0, duplicates: 0, errors: [] };
+
+  await db.transaction(async (trx) => {
+    const allEmployees = await trx('employees').select('id', 'full_name').where('is_active', true);
+    const empByName = new Map<string, number>(
+      allEmployees.map((e: { id: number; full_name: string }) => [e.full_name.toLowerCase().trim(), e.id]),
+    );
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || Object.values(row).every((v) => v == null || v === '')) {
+        result.skipped++;
+        continue;
+      }
+      try {
+        const data: Record<string, any> = { created_by_user_id: args.userId };
+
+        for (const [excelHeader, fieldKey] of Object.entries(args.mapping)) {
+          if (!fieldKey) continue;
+          const field = fieldByKey.get(fieldKey);
+          if (!field) continue;
+          const raw = row[excelHeader];
+
+          let value: any;
+          switch (field.kind) {
+            case 'date':             value = parseDateToString(raw); break;
+            case 'time_text':        value = parseTimeText(raw); break;
+            case 'text':             value = normVal(raw); break;
+            case 'employee_lookup': {
+              const name = normVal(raw);
+              value = name ? (empByName.get(name.toLowerCase().trim()) ?? null) : null;
+              break;
+            }
+            default:                 value = normVal(raw);
+          }
+
+          if (fieldKey === 'raised_by') {
+            data.raised_by_employee_id = value;
+          } else {
+            data[fieldKey] = value;
+          }
+        }
+
+        if (args.tableType === 'incidents') {
+          const d = data.date as string | null;
+          if (d) {
+            if (data.start_time) data.start_datetime = `${d} ${data.start_time}`;
+            if (data.end_time)   data.end_datetime   = `${d} ${data.end_time}`;
+          }
+          delete data.start_time;
+          delete data.end_time;
+        }
+
+        if (!args.dryRun) await trx(table).insert(data);
+        result.inserted++;
+      } catch (e: any) {
+        result.errors.push({ row: i + 2, error: e.message });
+      }
+    }
+    if (args.dryRun) throw new Error('__DRY_RUN__');
   }).catch((e: any) => {
     if (e.message !== '__DRY_RUN__') throw e;
   });

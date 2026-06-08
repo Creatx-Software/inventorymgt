@@ -3,41 +3,39 @@ import type { ListParams, PaginatedResponse } from '../types/api';
 
 export interface Incident {
   id: number;
+  date: string | null;
   incident_code: string | null;
-  start_datetime: string;
+  start_datetime: string | null;
   end_datetime: string | null;
   application_impacted: string | null;
-  can_id: string | null;
   problem_statement: string | null;
-  impact_assessment: string | null;
-  business_impact: string | null;
-  observations: string | null;
-  teams_involved: string | null;
-  ips_impacted: string | null;
+  sn_call_number: string | null;
+  raised_by_employee_id: number | null;
+  raised_by_name: string | null;
+  email_attachment_name: string | null;
+  has_attachment: 0 | 1;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface IncidentWithLinks extends Incident {
-  servers: { id: number; serial_number: string; application_name: string | null; host_name: string | null }[];
-  network_devices: { id: number; serial_number: string; device_name: string | null; host_name: string | null }[];
-}
-
 export const incidentsApi = {
-  list: async (p: ListParams = {}): Promise<PaginatedResponse<Incident>> => {
-    const q: any = { page: p.page || 1, pageSize: p.pageSize || 100 };
-    if (p.search) q.search = p.search;
-    if (p.sortBy) { q.sortBy = p.sortBy; q.sortDir = p.sortDir || 'desc'; }
-    const r = await api.get('/incidents', { params: q });
-    return r.data;
+  list: (p: ListParams = {}): Promise<PaginatedResponse<Incident>> =>
+    api.get('/incidents', { params: p }).then((r) => r.data),
+  get: (id: number): Promise<Incident> => api.get(`/incidents/${id}`).then((r) => r.data),
+  create: (fd: FormData): Promise<Incident> => api.post('/incidents', fd).then((r) => r.data),
+  update: (id: number, fd: FormData): Promise<Incident> => api.put(`/incidents/${id}`, fd).then((r) => r.data),
+  remove: (id: number): Promise<void> => api.delete(`/incidents/${id}`).then(() => {}),
+  bulkDelete: (ids: number[]): Promise<{ deleted: number }> =>
+    api.post('/incidents/bulk-delete', { ids }).then((r) => r.data),
+  downloadAttachment: async (id: number, filename: string) => {
+    const res = await api.get(`/incidents/${id}/attachment`, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
   },
-  get: async (id: number): Promise<IncidentWithLinks> => (await api.get(`/incidents/${id}`)).data,
-  create: async (data: any): Promise<Incident> => (await api.post('/incidents', data)).data,
-  update: async (id: number, data: any): Promise<Incident> => (await api.put(`/incidents/${id}`, data)).data,
-  remove: async (id: number): Promise<void> => { await api.delete(`/incidents/${id}`); },
-  bulkDelete: async (ids: number[]): Promise<{ deleted: number }> =>
-    (await api.post('/incidents/bulk-delete', { ids })).data,
 };
 
 export interface AuditLog {

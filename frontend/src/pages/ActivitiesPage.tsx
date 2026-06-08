@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Paperclip, Download } from 'lucide-react';
+import { Paperclip, Download, Upload } from 'lucide-react';
 import { DataTable } from '../components/table/DataTable';
 import type { FilterFieldDef } from '../components/table/DataTable';
 import { Drawer } from '../components/ui/Drawer';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
+import { ImportModal } from '../components/import/ImportModal';
 import { activitiesApi, type Activity } from '../api/activities';
 import { employeesApi } from '../api/lookups';
 import { fmtDate } from '../components/asset/CommonFields';
@@ -117,6 +118,7 @@ const EMPTY: FormState = {
 export default function ActivitiesPage() {
   const { user, isSuperAdmin } = useAuth();
   const [open, setOpen]         = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing]   = useState<Activity | null>(null);
   const [form, setForm]         = useState<FormState>(EMPTY);
   const [file, setFile]         = useState<File | null>(null);
@@ -227,6 +229,19 @@ export default function ActivitiesPage() {
         viewKey="activities"
         defaultSorting={[{ id: 'date', desc: true }]}
         filterFields={filterFields}
+        extraActions={
+          <button onClick={() => setImportOpen(true)} className="btn-secondary">
+            <Upload className="w-4 h-4" /> Import
+          </button>
+        }
+      />
+
+      <ImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        assetType="activities"
+        title="Activities"
+        onSuccess={() => setReloadKey((k) => k + 1)}
       />
 
       <Drawer

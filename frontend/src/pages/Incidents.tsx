@@ -1,299 +1,409 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { Paperclip, Download, Upload } from 'lucide-react';
 import { DataTable } from '../components/table/DataTable';
+import type { FilterFieldDef } from '../components/table/DataTable';
 import { Drawer } from '../components/ui/Drawer';
-import { incidentsApi, type Incident, type IncidentWithLinks } from '../api/operations';
-import { serversApi, networkDevicesApi } from '../api/assets';
-import type { Server, NetworkDevice } from '../types/assets';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
+import { ImportModal } from '../components/import/ImportModal';
+import { incidentsApi, type Incident } from '../api/operations';
+import { employeesApi } from '../api/lookups';
 import { fmtDate } from '../components/asset/CommonFields';
-import { X } from 'lucide-react';
+import type { Employee, ListParams } from '../types/api';
 
-const fmtDateTime = (v: string | null) => (v ? new Date(v).toLocaleString('en-GB') : '—');
+const fmtTime = (dt: string | null) => {
+  if (!dt) return '—';
+  const d = new Date(dt);
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+};
 
 const columns: ColumnDef<Incident, any>[] = [
-  { accessorKey: 'id', header: 'ID', size: 70 },
-  { accessorKey: 'incident_code', header: 'Code', size: 160, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
-  { accessorKey: 'start_datetime', header: 'Started', size: 170, cell: (i) => fmtDateTime(i.getValue() as string) },
-  { accessorKey: 'end_datetime', header: 'Ended', size: 170, cell: (i) => fmtDateTime(i.getValue() as string) },
-  { accessorKey: 'application_impacted', header: 'Application', size: 200, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
-  { accessorKey: 'can_id', header: 'CAN ID', size: 120, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
-  { accessorKey: 'problem_statement', header: 'Problem', size: 300, cell: (i) => (
-    <span className="line-clamp-1">{i.getValue() as string || <span className="text-slate-300">—</span>}</span>
-  ) },
-  { accessorKey: 'created_at', header: 'Created', size: 110, cell: (i) => fmtDate(i.getValue() as string) },
+  {
+    accessorKey: 'date',
+    header: 'Date',
+    size: 110,
+    cell: (i) => i.getValue()
+      ? <span className="font-medium text-brand-600">{fmtDate(i.getValue() as string)}</span>
+      : <span className="text-slate-300">—</span>,
+  },
+  {
+    accessorKey: 'start_datetime',
+    header: 'Start Time',
+    size: 110,
+    cell: (i) => <span className="font-mono text-xs">{fmtTime(i.getValue() as string)}</span>,
+  },
+  {
+    accessorKey: 'end_datetime',
+    header: 'End Time',
+    size: 110,
+    cell: (i) => <span className="font-mono text-xs">{fmtTime(i.getValue() as string)}</span>,
+  },
+  {
+    accessorKey: 'incident_code',
+    header: 'Incident Number',
+    size: 160,
+    cell: (i) => i.getValue() || <span className="text-slate-300">—</span>,
+  },
+  {
+    accessorKey: 'application_impacted',
+    header: 'Application Name',
+    size: 180,
+    cell: (i) => i.getValue() || <span className="text-slate-300">—</span>,
+  },
+  {
+    accessorKey: 'problem_statement',
+    header: 'Description',
+    size: 280,
+    cell: (i) => (
+      <span className="line-clamp-1 text-slate-600">
+        {i.getValue() || <span className="text-slate-300">—</span>}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'sn_call_number',
+    header: 'SN / Call No.',
+    size: 140,
+    cell: (i) => i.getValue() || <span className="text-slate-300">—</span>,
+  },
+  {
+    accessorKey: 'raised_by_name',
+    header: 'Raised By',
+    size: 150,
+    cell: (i) => i.getValue() || <span className="text-slate-300">—</span>,
+  },
+  {
+    id: 'email_attachment',
+    header: 'Email Attached',
+    size: 200,
+    cell: ({ row }) => {
+      const r = row.original;
+      if (!r.has_attachment) return <span className="text-slate-300">—</span>;
+      return (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            incidentsApi.downloadAttachment(r.id, r.email_attachment_name ?? 'attachment.msg');
+          }}
+          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors text-xs font-medium max-w-[180px]"
+          title={`Download ${r.email_attachment_name}`}
+        >
+          <Paperclip className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">{r.email_attachment_name}</span>
+          <Download className="w-3 h-3 shrink-0" />
+        </button>
+      );
+    },
+  },
+];
+
+const filterFields: FilterFieldDef[] = [
+  { key: 'incident_code',        label: 'Incident Number', type: 'text' },
+  { key: 'application_impacted', label: 'Application Name', type: 'text' },
+  { key: 'sn_call_number',       label: 'SN / Call No.',   type: 'text' },
 ];
 
 interface FormState {
+  date: string;
+  start_time: string;
+  end_time: string;
   incident_code: string;
-  start_datetime: string;
-  end_datetime: string;
   application_impacted: string;
-  can_id: string;
   problem_statement: string;
-  impact_assessment: string;
-  business_impact: string;
-  observations: string;
-  teams_involved: string;
-  ips_impacted: string;
-  server_ids: number[];
-  network_device_ids: number[];
+  sn_call_number: string;
+  raised_by_employee_id: string;
 }
 
-const empty: FormState = {
-  incident_code: '', start_datetime: '', end_datetime: '',
-  application_impacted: '', can_id: '',
-  problem_statement: '', impact_assessment: '', business_impact: '',
-  observations: '', teams_involved: '', ips_impacted: '',
-  server_ids: [], network_device_ids: [],
+const EMPTY: FormState = {
+  date: '', start_time: '', end_time: '',
+  incident_code: '', application_impacted: '',
+  problem_statement: '', sn_call_number: '',
+  raised_by_employee_id: '',
 };
 
-const toLocalInput = (iso: string | null) => {
+const toDateStr = (iso: string | null) => (iso ? iso.slice(0, 10) : '');
+const toTimeStr = (iso: string | null) => {
   if (!iso) return '';
   const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+const combineDatetime = (date: string, time: string): string | null => {
+  if (!date) return null;
+  const t = time || '00:00';
+  return `${date}T${t}:00`;
 };
 
 export default function IncidentsPage() {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Incident | null>(null);
-  const [form, setForm] = useState<FormState>(empty);
-  const [saving, setSaving] = useState(false);
+  const [open, setOpen]           = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [editing, setEditing]     = useState<Incident | null>(null);
+  const [form, setForm]           = useState<FormState>(EMPTY);
+  const [file, setFile]           = useState<File | null>(null);
+  const [removeAttach, setRemoveAttach] = useState(false);
+  const [saving, setSaving]       = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [servers, setServers] = useState<Server[]>([]);
-  const [devices, setDevices] = useState<NetworkDevice[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const fetcher = useCallback((p: any) => incidentsApi.list(p), [reloadKey]);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const fetcher = useCallback(
+    (p: ListParams) => incidentsApi.list(p),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [reloadKey],
+  );
 
   useEffect(() => {
-    serversApi.list({ pageSize: 500 }).then((r) => setServers(r.data as any)).catch(() => {});
-    networkDevicesApi.list({ pageSize: 500 }).then((r) => setDevices(r.data as any)).catch(() => {});
+    employeesApi.list({ pageSize: 1000, filters: { is_active: '1' } })
+      .then((r) => setEmployees(r.data))
+      .catch(() => {});
   }, []);
 
   const openNew = () => {
     setEditing(null);
-    setForm({ ...empty, start_datetime: toLocalInput(new Date().toISOString()) });
+    setForm({ ...EMPTY, date: today });
+    setFile(null);
+    setRemoveAttach(false);
     setOpen(true);
   };
 
-  const openEdit = async (row: Incident) => {
-    const full: IncidentWithLinks = await incidentsApi.get(row.id);
-    setEditing(row);
+  const openEdit = (r: Incident) => {
+    setEditing(r);
     setForm({
-      incident_code: full.incident_code || '',
-      start_datetime: toLocalInput(full.start_datetime),
-      end_datetime: toLocalInput(full.end_datetime),
-      application_impacted: full.application_impacted || '',
-      can_id: full.can_id || '',
-      problem_statement: full.problem_statement || '',
-      impact_assessment: full.impact_assessment || '',
-      business_impact: full.business_impact || '',
-      observations: full.observations || '',
-      teams_involved: full.teams_involved || '',
-      ips_impacted: full.ips_impacted || '',
-      server_ids: full.servers.map((s) => s.id),
-      network_device_ids: full.network_devices.map((d) => d.id),
+      date:                  toDateStr(r.date ?? r.start_datetime),
+      start_time:            toTimeStr(r.start_datetime),
+      end_time:              toTimeStr(r.end_datetime),
+      incident_code:         r.incident_code         ?? '',
+      application_impacted:  r.application_impacted  ?? '',
+      problem_statement:     r.problem_statement      ?? '',
+      sn_call_number:        r.sn_call_number         ?? '',
+      raised_by_employee_id: r.raised_by_employee_id ? String(r.raised_by_employee_id) : '',
     });
+    setFile(null);
+    setRemoveAttach(false);
     setOpen(true);
   };
+
+  const closeDrawer = () => { setOpen(false); setEditing(null); setFile(null); };
+
+  const f = <K extends keyof FormState>(key: K) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
   const save = async () => {
-    if (!form.start_datetime) { alert('Start date is required'); return; }
     setSaving(true);
     try {
-      const payload = {
-        incident_code: form.incident_code || null,
-        start_datetime: form.start_datetime ? new Date(form.start_datetime).toISOString().slice(0, 19).replace('T', ' ') : null,
-        end_datetime: form.end_datetime ? new Date(form.end_datetime).toISOString().slice(0, 19).replace('T', ' ') : null,
-        application_impacted: form.application_impacted || null,
-        can_id: form.can_id || null,
-        problem_statement: form.problem_statement || null,
-        impact_assessment: form.impact_assessment || null,
-        business_impact: form.business_impact || null,
-        observations: form.observations || null,
-        teams_involved: form.teams_involved || null,
-        ips_impacted: form.ips_impacted || null,
-        server_ids: form.server_ids,
-        network_device_ids: form.network_device_ids,
-      };
-      if (editing) await incidentsApi.update(editing.id, payload);
-      else await incidentsApi.create(payload);
-      setOpen(false);
+      const fd = new FormData();
+      fd.append('date',                 form.date);
+      fd.append('start_datetime',       combineDatetime(form.date, form.start_time) ?? '');
+      fd.append('end_datetime',         combineDatetime(form.date, form.end_time)   ?? '');
+      fd.append('incident_code',        form.incident_code);
+      fd.append('application_impacted', form.application_impacted);
+      fd.append('problem_statement',    form.problem_statement);
+      fd.append('sn_call_number',       form.sn_call_number);
+      fd.append('raised_by_employee_id', form.raised_by_employee_id);
+      if (file) fd.append('email_attachment', file);
+      if (editing && removeAttach && !file) fd.append('remove_attachment', '1');
+
+      if (editing) await incidentsApi.update(editing.id, fd);
+      else         await incidentsApi.create(fd);
+
       setReloadKey((k) => k + 1);
+      closeDrawer();
     } catch (e: any) {
       alert(e.response?.data?.error || 'Failed to save');
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async () => {
     if (!editing || !confirm('Delete this incident?')) return;
     await incidentsApi.remove(editing.id);
-    setOpen(false);
     setReloadKey((k) => k + 1);
+    closeDrawer();
   };
 
-  const toggle = (key: 'server_ids' | 'network_device_ids', id: number) => {
-    const arr = form[key];
-    setForm({
-      ...form,
-      [key]: arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id],
-    });
-  };
+  const hasAttachment = !!(editing?.has_attachment);
+  const showExistingAttachment = hasAttachment && !removeAttach && !file;
+
+  const employeeOptions = employees.map((e) => ({
+    value: String(e.id),
+    label: e.full_name,
+    sublabel: e.employee_code ?? undefined,
+  }));
 
   return (
     <>
       <DataTable<Incident>
-        title="Network Incidents"
-        subtitle="Outages, degradations, and impact reports"
+        title="Incidents"
+        subtitle="Incident log with email attachments"
         columns={columns}
         fetcher={fetcher}
         onCreate={openNew}
         onRowClick={openEdit}
-        onBulkDelete={async (ids) => { await incidentsApi.bulkDelete(ids); setReloadKey((k) => k + 1); }}
-        stickyColumnIds={['incident_code']}
+        onBulkDelete={async (ids) => {
+          await incidentsApi.bulkDelete(ids);
+          setReloadKey((k) => k + 1);
+        }}
         viewKey="incidents"
+        defaultSorting={[{ id: 'date', desc: true }]}
+        filterFields={filterFields}
+        extraActions={
+          <button onClick={() => setImportOpen(true)} className="btn-secondary">
+            <Upload className="w-4 h-4" /> Import
+          </button>
+        }
+      />
+
+      <ImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        assetType="incidents"
+        title="Incidents"
+        onSuccess={() => setReloadKey((k) => k + 1)}
       />
 
       <Drawer
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={closeDrawer}
         title={editing ? 'Edit Incident' : 'New Incident'}
-        subtitle={editing ? `ID #${editing.id}` : 'Log a new network incident'}
+        subtitle={editing ? `ID #${editing.id}` : 'Log a new incident'}
         width="lg"
         footer={
           <div className="flex justify-between">
-            <div>{editing && <button onClick={remove} className="btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Delete</button>}</div>
+            <div>
+              {editing && (
+                <button onClick={remove} className="btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">
+                  Delete
+                </button>
+              )}
+            </div>
             <div className="flex gap-2">
-              <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
-              <button onClick={save} disabled={saving} className="btn-primary">{saving ? 'Saving...' : 'Save'}</button>
+              <button onClick={closeDrawer} className="btn-secondary">Cancel</button>
+              <button onClick={save} disabled={saving} className="btn-primary">
+                {saving ? 'Saving…' : 'Save'}
+              </button>
             </div>
           </div>
         }
       >
         <div className="space-y-5">
+          {/* Row 1: Date, Incident Number */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Incident Code</label>
-              <input className="input" value={form.incident_code} onChange={(e) => setForm({ ...form, incident_code: e.target.value })} placeholder="INC-2024-001" />
+              <label className="label">Date</label>
+              <input type="date" className="input" value={form.date} onChange={f('date')} />
             </div>
             <div>
-              <label className="label">CAN ID</label>
-              <input className="input" value={form.can_id} onChange={(e) => setForm({ ...form, can_id: e.target.value })} />
-            </div>
-            <div>
-              <label className="label">Start Date/Time *</label>
-              <input type="datetime-local" className="input" value={form.start_datetime} onChange={(e) => setForm({ ...form, start_datetime: e.target.value })} required />
-            </div>
-            <div>
-              <label className="label">End Date/Time</label>
-              <input type="datetime-local" className="input" value={form.end_datetime} onChange={(e) => setForm({ ...form, end_datetime: e.target.value })} />
-            </div>
-            <div className="col-span-2">
-              <label className="label">Application Impacted</label>
-              <input className="input" value={form.application_impacted} onChange={(e) => setForm({ ...form, application_impacted: e.target.value })} />
+              <label className="label">Incident Number</label>
+              <input className="input" value={form.incident_code} onChange={f('incident_code')} placeholder="INC-2024-001" />
             </div>
           </div>
 
-          <div>
-            <label className="label">Problem Statement</label>
-            <textarea className="input min-h-[80px]" value={form.problem_statement} onChange={(e) => setForm({ ...form, problem_statement: e.target.value })} />
-          </div>
-          <div>
-            <label className="label">Impact Assessment</label>
-            <textarea className="input min-h-[70px]" value={form.impact_assessment} onChange={(e) => setForm({ ...form, impact_assessment: e.target.value })} />
-          </div>
-          <div>
-            <label className="label">Business Impact</label>
-            <textarea className="input min-h-[70px]" value={form.business_impact} onChange={(e) => setForm({ ...form, business_impact: e.target.value })} />
-          </div>
-          <div>
-            <label className="label">Observations</label>
-            <textarea className="input min-h-[70px]" value={form.observations} onChange={(e) => setForm({ ...form, observations: e.target.value })} />
-          </div>
+          {/* Row 2: Start Time, End Time */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Teams Involved</label>
-              <input className="input" value={form.teams_involved} onChange={(e) => setForm({ ...form, teams_involved: e.target.value })} />
+              <label className="label">Start Time</label>
+              <input type="time" className="input" value={form.start_time} onChange={f('start_time')} />
             </div>
             <div>
-              <label className="label">IPs Impacted</label>
-              <input className="input font-mono text-xs" value={form.ips_impacted} onChange={(e) => setForm({ ...form, ips_impacted: e.target.value })} />
+              <label className="label">End Time</label>
+              <input type="time" className="input" value={form.end_time} onChange={f('end_time')} />
             </div>
           </div>
 
-          {/* Linked servers */}
+          {/* Row 3: Application Name, SN / Call Number */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Application Name</label>
+              <input className="input" value={form.application_impacted} onChange={f('application_impacted')} placeholder="e.g. Core Banking" />
+            </div>
+            <div>
+              <label className="label">SN / Call Number</label>
+              <input className="input" value={form.sn_call_number} onChange={f('sn_call_number')} placeholder="Ticket or serial no." />
+            </div>
+          </div>
+
+          {/* Row 4: Raised By */}
           <div>
-            <label className="label">Linked Servers</label>
-            <MultiSelect
-              items={servers.map((s) => ({ id: s.id, label: s.application_name || s.serial_number, sub: s.host_name || s.serial_number }))}
-              selected={form.server_ids}
-              onToggle={(id) => toggle('server_ids', id)}
-              placeholder="Search servers by name, host..."
+            <label className="label">Raised By</label>
+            <SearchableSelect
+              value={form.raised_by_employee_id}
+              onChange={(v) => setForm((prev) => ({ ...prev, raised_by_employee_id: v }))}
+              options={employeeOptions}
+              placeholder="Search employee…"
+              emptyOption="— None —"
             />
           </div>
 
-          {/* Linked network devices */}
+          {/* Row 5: Description */}
           <div>
-            <label className="label">Linked Network Devices</label>
-            <MultiSelect
-              items={devices.map((d) => ({ id: d.id, label: d.device_name || d.serial_number, sub: d.host_name || d.serial_number }))}
-              selected={form.network_device_ids}
-              onToggle={(id) => toggle('network_device_ids', id)}
-              placeholder="Search network devices..."
+            <label className="label">Description</label>
+            <textarea
+              className="input min-h-[90px]"
+              value={form.problem_statement}
+              onChange={f('problem_statement')}
+              placeholder="Describe the incident…"
             />
+          </div>
+
+          {/* Email Attachment */}
+          <div>
+            <label className="label">
+              Email Attached <span className="text-slate-400 font-normal text-xs">(.msg files only)</span>
+            </label>
+
+            {showExistingAttachment && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg mb-2">
+                <Paperclip className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <span className="text-xs text-blue-700 truncate flex-1">{editing?.email_attachment_name}</span>
+                <button
+                  onClick={() => setRemoveAttach(true)}
+                  className="text-xs text-red-500 hover:text-red-700 shrink-0"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+
+            {removeAttach && !file && (
+              <p className="text-xs text-slate-500 mb-2">
+                Attachment will be removed on save.{' '}
+                <button onClick={() => setRemoveAttach(false)} className="text-brand-600 hover:underline">Undo</button>
+              </p>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".msg"
+                onChange={(e) => {
+                  const picked = e.target.files?.[0] ?? null;
+                  if (picked && !picked.name.toLowerCase().endsWith('.msg')) {
+                    alert('Only .msg files are allowed');
+                    e.target.value = '';
+                    return;
+                  }
+                  setFile(picked);
+                  if (picked) setRemoveAttach(false);
+                }}
+                className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer"
+              />
+              {file && (
+                <button
+                  onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ''; }}
+                  className="shrink-0 text-xs text-slate-400 hover:text-slate-600 underline whitespace-nowrap"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {file && <p className="text-xs text-slate-500 mt-1">Selected: {file.name}</p>}
           </div>
         </div>
       </Drawer>
     </>
-  );
-}
-
-function MultiSelect({
-  items, selected, onToggle, placeholder,
-}: {
-  items: { id: number; label: string; sub?: string }[];
-  selected: number[];
-  onToggle: (id: number) => void;
-  placeholder?: string;
-}) {
-  const [q, setQ] = useState('');
-  const filtered = items.filter((i) =>
-    i.label.toLowerCase().includes(q.toLowerCase()) ||
-    (i.sub || '').toLowerCase().includes(q.toLowerCase()),
-  );
-
-  const selectedItems = items.filter((i) => selected.includes(i.id));
-
-  return (
-    <div className="space-y-2">
-      {selectedItems.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedItems.map((i) => (
-            <span key={i.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-brand-50 text-brand-700 border border-brand-200">
-              {i.label}
-              <button onClick={() => onToggle(i.id)} className="hover:text-brand-900">
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <input className="input" placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)} />
-      {q && (
-        <div className="card max-h-48 overflow-y-auto">
-          {filtered.length === 0 && <div className="px-3 py-2 text-xs text-slate-400">No matches</div>}
-          {filtered.slice(0, 20).map((i) => (
-            <button
-              key={i.id}
-              onClick={() => onToggle(i.id)}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 border-b border-slate-100 last:border-0 ${selected.includes(i.id) ? 'bg-brand-50' : ''}`}
-            >
-              <div className="font-medium text-slate-900">{i.label}</div>
-              {i.sub && <div className="text-xs text-slate-500">{i.sub}</div>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
