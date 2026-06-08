@@ -169,8 +169,10 @@ System roles seeded: **superadmin** (all permissions), **admin** (all except `ro
 | UNIQUE(role_id, permission) | | |
 
 Permission key format: `{resource}_{action}` where action is `view`, `create`, `edit`, or `delete`.
-Resources: `dashboard`, `endpoints`, `monitors`, `mobile_devices`, `ip_phones`, `servers`, `printers`, `network_devices`, `other_assets`, `incidents`, `employees`, `departments`, `locations`, `vendors`, `audit_logs`, `consumables`.
+Resources: `dashboard`, `endpoints`, `monitors`, `mobile_devices`, `ip_phones`, `servers`, `printers`, `network_devices`, `other_assets`, `incidents`, `employees`, `departments`, `locations`, `vendors`, `audit_logs`, `consumables`, `notes`, `activities`.
 Special: `users_manage`, `roles_manage`.
+Notes actions: `view`, `create`, `delete` (no edit — notes are immutable after creation).
+Activities actions: `view`, `create`, `edit`, `delete`.
 
 #### `employees` (asset owners — NOT login users)
 | Column | Type | Notes |
@@ -545,6 +547,8 @@ POST   /api/approvals/:id/reject   # reject — restores before_data to asset (s
 | `/roles` | Roles & Permissions | `roles_manage` or superadmin |
 | `/approvals` | Pending Approvals | superadmin only |
 | `/consumables` | Consumable Stock | `consumables_view` |
+| `/notes` | Notes | `notes_view` |
+| `/activities` | Activities | `activities_view` |
 
 Sidebar items are filtered automatically based on the logged-in user's permissions.
 

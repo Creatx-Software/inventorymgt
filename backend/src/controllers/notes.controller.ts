@@ -1,12 +1,12 @@
 import { Router, Response } from 'express';
 import db from '../config/db';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth';
 
 export const notesRouter = Router();
 notesRouter.use(authMiddleware);
 
 // GET /api/notes — all notes, newest first, with creator name
-notesRouter.get('/', async (_req: AuthRequest, res: Response) => {
+notesRouter.get('/', requirePermission('notes_view'), async (_req: AuthRequest, res: Response) => {
   const notes = await db('notes as n')
     .join('users as u', 'n.created_by_user_id', 'u.id')
     .select('n.*', 'u.full_name as created_by_name')
@@ -15,7 +15,7 @@ notesRouter.get('/', async (_req: AuthRequest, res: Response) => {
 });
 
 // POST /api/notes — create a note
-notesRouter.post('/', async (req: AuthRequest, res: Response) => {
+notesRouter.post('/', requirePermission('notes_create'), async (req: AuthRequest, res: Response) => {
   const { date, description } = req.body as { date: string; description: string };
   if (!date || !description?.trim()) {
     res.status(400).json({ error: 'date and description are required' });
@@ -35,7 +35,7 @@ notesRouter.post('/', async (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /api/notes/:id — only creator or superadmin can delete
-notesRouter.delete('/:id', async (req: AuthRequest, res: Response) => {
+notesRouter.delete('/:id', requirePermission('notes_delete'), async (req: AuthRequest, res: Response) => {
   const note = await db('notes').where('id', req.params.id).first();
   if (!note) {
     res.status(404).json({ error: 'Note not found' });

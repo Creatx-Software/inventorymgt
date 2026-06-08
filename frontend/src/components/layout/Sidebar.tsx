@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Laptop, Monitor, Smartphone, Phone, Server,
   Printer, Network, Package, AlertTriangle, Users, Building2,
   MapPin, Tag, ScrollText, Settings, Boxes, ChevronsLeft, ChevronsRight,
-  UserCog, ShieldCheck, CheckSquare, ShieldAlert, PackageOpen, StickyNote,
+  UserCog, ShieldCheck, CheckSquare, ShieldAlert, PackageOpen, StickyNote, Activity,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -63,7 +63,8 @@ const sections: NavSection[] = [
   {
     title: 'Tools',
     items: [
-      { to: '/notes', label: 'Notes', icon: StickyNote },
+      { to: '/notes',      label: 'Notes',      icon: StickyNote, permission: 'notes_view' },
+      { to: '/activities', label: 'Activities',  icon: Activity,   permission: 'activities_view' },
     ],
   },
   {

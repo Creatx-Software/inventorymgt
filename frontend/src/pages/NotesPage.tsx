@@ -79,7 +79,7 @@ export default function NotesPage() {
   }
 
   function formatDate(iso: string) {
-    const [y, m, d] = iso.split('-');
+    const [y, m, d] = iso.slice(0, 10).split('-');
     return `${d}/${m}/${y}`;
   }
 
