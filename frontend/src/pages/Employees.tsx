@@ -7,7 +7,7 @@ import { employeesApi, departmentsApi, locationsApi } from '../api/lookups';
 import { api } from '../api/client';
 import type { Employee, Department, Location } from '../types/api';
 import clsx from 'clsx';
-import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen, Copy, Check } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen, Copy, Check, Download } from 'lucide-react';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { consumablesApi } from '../api/consumables';
 import type { ConsumableAssignment } from '../types/api';
@@ -178,6 +178,27 @@ export default function EmployeesPage() {
     if (tab === 'consumables' && editing) loadConsumables();
   }, [tab, editing]);
 
+  const [exporting, setExporting] = useState(false);
+  const downloadAssets = async () => {
+    if (!editing) return;
+    setExporting(true);
+    try {
+      const r = await api.get(`/employees/${editing.id}/export`, { responseType: 'blob' });
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement('a');
+      const disposition = r.headers['content-disposition'] ?? '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      a.href = url;
+      a.download = match?.[1] ?? `${editing.full_name}_assets.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Failed to export');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -275,6 +296,17 @@ export default function EmployeesPage() {
           <div className="flex justify-between">
             <div>{editing && <button onClick={remove} className="btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Delete</button>}</div>
             <div className="flex gap-2">
+              {editing && (
+                <button
+                  onClick={downloadAssets}
+                  disabled={exporting}
+                  className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                  title="Download all assigned assets as Excel"
+                >
+                  {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  Export
+                </button>
+              )}
               <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
               <button onClick={save} disabled={saving || !form.full_name} className="btn-primary">{saving ? 'Saving...' : 'Save'}</button>
             </div>
