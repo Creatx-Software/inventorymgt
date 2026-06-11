@@ -27,6 +27,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/approvals':       'Pending Approvals',
   '/warranty':        'Warranty',
   '/consumables':     'Consumable Stock',
+  '/firewalls':       'Firewall Rules',
 };
 
 const STORAGE_KEY = 'sidebar:collapsed';

@@ -48,6 +48,26 @@ export interface RecentActivity {
   user_full_name: string | null;
 }
 
+export interface FirewallExpiryAlert {
+  id: number;
+  application_name: string;
+  sn_call_number: string | null;
+  expire_date: string;
+  rule_type: 'Temp' | 'Permanent';
+  direction: 'Bi-Directional' | 'Uni-Directional';
+  protocol: 'TCP' | 'UDP' | 'TCP/UDP';
+  ports: string | null;
+  engineer_name: string | null;
+  days_remaining: number;
+}
+
+export interface FirewallExpiryBuckets {
+  expired: FirewallExpiryAlert[];
+  within30: FirewallExpiryAlert[];
+  within60: FirewallExpiryAlert[];
+  within90: FirewallExpiryAlert[];
+}
+
 export interface ChartsData {
   byLocation: { name: string; value: number }[];
   byStatus: { name: string; value: number; color: string }[];
@@ -59,6 +79,7 @@ export const dashboardApi = {
   summary: async (): Promise<DashboardSummary> => (await api.get('/dashboard/summary')).data,
   warranty: async (): Promise<AlertBuckets> => (await api.get('/dashboard/warranty')).data,
   eol: async (): Promise<AlertBuckets> => (await api.get('/dashboard/eol')).data,
+  firewalls: async (): Promise<FirewallExpiryBuckets> => (await api.get('/dashboard/firewalls')).data,
   recentActivity: async (): Promise<RecentActivity[]> => (await api.get('/dashboard/recent-activity')).data,
   charts: async (): Promise<ChartsData> => (await api.get('/dashboard/charts')).data,
 };

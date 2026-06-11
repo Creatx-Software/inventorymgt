@@ -51,6 +51,8 @@ export interface MobileDevice extends AssetCommon {
 
 export interface IpPhone extends AssetCommon {
   mac_address: string | null;
+  phone_number: string | null;
+  is_recording_enabled: boolean;
 }
 
 export interface Server extends AssetCommon {

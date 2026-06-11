@@ -25,6 +25,7 @@ import WarrantyPage from './pages/WarrantyPage';
 import ConsumableStock from './pages/ConsumableStock';
 import NotesPage from './pages/NotesPage';
 import ActivitiesPage from './pages/ActivitiesPage';
+import Firewalls from './pages/Firewalls';
 
 export default function App() {
   return (
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="/consumables"       element={<ConsumableStock />} />
             <Route path="/notes"             element={<NotesPage />} />
             <Route path="/activities"        element={<ActivitiesPage />} />
+            <Route path="/firewalls"         element={<Firewalls />} />
           </Route>
         </Routes>
       </BrowserRouter>

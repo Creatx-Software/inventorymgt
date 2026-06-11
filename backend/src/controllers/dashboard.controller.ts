@@ -139,6 +139,47 @@ dashboardRouter.get('/eol', async (_req, res) => {
   res.json(toBuckets(rows));
 });
 
+// Firewall rules expiring soon. Only Temp rules with an expire_date are considered.
+dashboardRouter.get('/firewalls', async (_req, res) => {
+  const today = new Date();
+  const data = await db('firewall_rules')
+    .leftJoin('employees as e', 'firewall_rules.engineer_requested_employee_id', 'e.id')
+    .whereNull('firewall_rules.deleted_at')
+    .whereNotNull('firewall_rules.expire_date')
+    .where('firewall_rules.rule_type', 'Temp')
+    .select(
+      'firewall_rules.id',
+      'firewall_rules.application_name',
+      'firewall_rules.sn_call_number',
+      'firewall_rules.expire_date',
+      'firewall_rules.rule_type',
+      'firewall_rules.direction',
+      'firewall_rules.protocol',
+      'firewall_rules.ports',
+      'e.full_name as engineer_name',
+    );
+
+  const buckets = {
+    expired:  [] as any[],
+    within30: [] as any[],
+    within60: [] as any[],
+    within90: [] as any[],
+  };
+  for (const row of data as any[]) {
+    const exp = new Date(row.expire_date);
+    const diff = Math.ceil((exp.getTime() - today.getTime()) / 86400000);
+    const item = { ...row, days_remaining: diff };
+    if (diff < 0)       buckets.expired.push(item);
+    else if (diff <= 30) buckets.within30.push(item);
+    else if (diff <= 60) buckets.within60.push(item);
+    else if (diff <= 90) buckets.within90.push(item);
+  }
+  (Object.keys(buckets) as (keyof typeof buckets)[]).forEach((k) => {
+    buckets[k].sort((a, b) => a.days_remaining - b.days_remaining);
+  });
+  res.json(buckets);
+});
+
 dashboardRouter.get('/recent-activity', async (_req, res) => {
   const rows = await db('audit_logs')
     .leftJoin('users', 'audit_logs.user_id', 'users.id')

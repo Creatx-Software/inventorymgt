@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom';
 import {
   Laptop, Monitor, Smartphone, Server, Printer, Network, Phone, Package,
   AlertTriangle, Users, MapPin, Tag, Activity, UserX, Loader2,
-  ArrowRight, Calendar,
+  ArrowRight, Calendar, Flame,
 } from 'lucide-react';
 import {
   BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer,
   XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from 'recharts';
-import { dashboardApi, type DashboardSummary, type AlertBuckets, type RecentActivity, type ChartsData } from '../api/dashboard';
+import { dashboardApi, type DashboardSummary, type AlertBuckets, type FirewallExpiryBuckets, type RecentActivity, type ChartsData } from '../api/dashboard';
 
 const assetTypeMeta = [
   { key: 'endpoint',       label: 'Endpoints',       icon: Laptop,     color: 'from-blue-500 to-indigo-600',     path: '/endpoints' },
@@ -35,6 +35,7 @@ const actionColor: Record<string, string> = {
 export default function Dashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [warranty, setWarranty] = useState<AlertBuckets | null>(null);
+  const [firewalls, setFirewalls] = useState<FirewallExpiryBuckets | null>(null);
   const [activity, setActivity] = useState<RecentActivity[]>([]);
   const [charts, setCharts] = useState<ChartsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,10 +44,11 @@ export default function Dashboard() {
     Promise.all([
       dashboardApi.summary(),
       dashboardApi.warranty(),
+      dashboardApi.firewalls(),
       dashboardApi.recentActivity(),
       dashboardApi.charts(),
-    ]).then(([s, w, a, c]) => {
-      setSummary(s); setWarranty(w); setActivity(a); setCharts(c);
+    ]).then(([s, w, f, a, c]) => {
+      setSummary(s); setWarranty(w); setFirewalls(f); setActivity(a); setCharts(c);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -216,6 +218,9 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Firewall expiry */}
+      <FirewallExpiryCard data={firewalls} />
+
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard title="Assets by Status" subtitle="Distribution across asset states">
@@ -274,6 +279,80 @@ export default function Dashboard() {
           ) : <EmptyChart />}
         </ChartCard>
       </div>
+    </div>
+  );
+}
+
+function FirewallExpiryCard({ data }: { data: FirewallExpiryBuckets | null }) {
+  const total = data
+    ? data.expired.length + data.within30.length + data.within60.length + data.within90.length
+    : 0;
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Firewall Rules — Expiring</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Temporary firewall rules expired or about to expire</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link to="/firewalls" className="text-xs text-brand-600 hover:underline flex items-center gap-1">
+            View all <ArrowRight className="w-3 h-3" />
+          </Link>
+          <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center">
+            <Flame className="w-5 h-5 text-orange-600" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        <AlertPill label="Expired"    count={data?.expired.length || 0}  color="red" />
+        <AlertPill label="< 30 days" count={data?.within30.length || 0} color="orange" />
+        <AlertPill label="< 60 days" count={data?.within60.length || 0} color="amber" />
+        <AlertPill label="< 90 days" count={data?.within90.length || 0} color="yellow" />
+      </div>
+
+      {total === 0 ? (
+        <div className="text-center text-sm text-slate-400 py-12">
+          No temporary firewall rules expiring soon 🎉
+        </div>
+      ) : (
+        <div className="space-y-1 max-h-80 overflow-y-auto">
+          {([
+            { bucket: data?.expired  || [], dot: 'bg-red-500' },
+            { bucket: data?.within30 || [], dot: 'bg-orange-500' },
+            { bucket: data?.within60 || [], dot: 'bg-amber-500' },
+            { bucket: data?.within90 || [], dot: 'bg-yellow-500' },
+          ]).map(({ bucket, dot }) =>
+            bucket.slice(0, 10).map((r) => (
+              <Link
+                key={r.id}
+                to={`/firewalls?openId=${r.id}`}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50"
+              >
+                <div className={`w-2 h-2 rounded-full ${dot}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-slate-900 truncate">
+                    {r.application_name}
+                  </div>
+                  <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                    {r.sn_call_number && <span className="font-mono">{r.sn_call_number}</span>}
+                    {r.engineer_name && <><span>·</span><span>{r.engineer_name}</span></>}
+                    {r.protocol && <><span>·</span><span className="font-mono">{r.protocol}{r.ports ? `:${r.ports}` : ''}</span></>}
+                  </div>
+                </div>
+                <div className="text-xs text-slate-500 flex items-center gap-1 shrink-0">
+                  <Calendar className="w-3 h-3" />
+                  {new Date(r.expire_date).toLocaleDateString('en-GB')}
+                </div>
+                <div className={`text-xs font-medium shrink-0 ${r.days_remaining < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                  {r.days_remaining < 0 ? `${Math.abs(r.days_remaining)}d ago` : `in ${r.days_remaining}d`}
+                </div>
+              </Link>
+            )),
+          )}
+        </div>
+      )}
     </div>
   );
 }
