@@ -193,11 +193,57 @@ employeeAssetsRouter.get('/:id/export', async (req, res) => {
     XLSX.utils.book_append_sheet(wb, buildSheet(headers, dataRows), 'Consumables');
   }
 
-  // Summary sheet — append then move to position 0 by reordering SheetNames
+  // Summary sheet — employee info block at top, then data table
   if (summaryRows.length > 0) {
     const summaryHeaders = ['Asset Type', 'Asset Name', 'Model', 'Serial Number', 'Vendor'];
-    XLSX.utils.book_append_sheet(wb, buildSheet(summaryHeaders, summaryRows), 'Summary');
-    // Move Summary to the front
+    const colCount = summaryHeaders.length;
+
+    const INFO_LABEL = {
+      fill: { patternType: 'solid', fgColor: { rgb: '1E3A8A' } },
+      font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11, name: 'Calibri' },
+      alignment: { horizontal: 'left', vertical: 'center' },
+    };
+    const INFO_VALUE = {
+      fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } },
+      font: { bold: true, color: { rgb: '1E3A8A' }, sz: 11, name: 'Calibri' },
+      alignment: { horizontal: 'left', vertical: 'center' },
+    };
+    const EMPTY_CELL = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } } } };
+
+    // Row 1: Employee Name
+    const nameRow = [
+      { v: 'Employee Name', t: 's', s: INFO_LABEL },
+      { v: emp.full_name ?? '', t: 's', s: INFO_VALUE },
+      ...Array(colCount - 2).fill(EMPTY_CELL),
+    ];
+    // Row 2: Employee ID
+    const idRow = [
+      { v: 'Employee ID', t: 's', s: INFO_LABEL },
+      { v: emp.employee_code ?? '—', t: 's', s: INFO_VALUE },
+      ...Array(colCount - 2).fill(EMPTY_CELL),
+    ];
+
+    const styledHeader = summaryHeaders.map((h) => ({ v: h, t: 's', s: HEADER_STYLE }));
+    const styledRows = summaryRows.map((row, ri) => {
+      const s = ri % 2 === 0 ? ROW_EVEN : ROW_ODD;
+      return row.map((val) => ({ v: val === null || val === undefined ? '' : val, t: typeof val === 'number' ? 'n' : 's', s }));
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([nameRow, idRow, styledHeader, ...styledRows]);
+
+    // Auto column widths (account for info rows too)
+    ws['!cols'] = summaryHeaders.map((h, ci) => {
+      const maxData = summaryRows.reduce((m, row) => Math.max(m, String(row[ci] ?? '').length), h.length);
+      return { wch: Math.min(45, Math.max(14, maxData + 2)) };
+    });
+
+    // Freeze after the 3 header rows (row 1+2 = info, row 3 = column headers)
+    ws['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: 3, topLeftCell: 'A4' }];
+
+    // Row heights: info rows taller
+    ws['!rows'] = [{ hpt: 22 }, { hpt: 22 }, { hpt: 20 }];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Summary');
     wb.SheetNames = ['Summary', ...wb.SheetNames.filter((n: string) => n !== 'Summary')];
   }
 
