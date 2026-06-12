@@ -1,7 +1,8 @@
-import { Router, Response } from 'express';
+import { Router } from 'express';
 import db from '../config/db';
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit.service';
+
 
 export const firewallsRouter = Router();
 firewallsRouter.use(authMiddleware);
@@ -62,8 +63,12 @@ firewallsRouter.get('/', requirePermission('firewalls_view'), async (req: AuthRe
   const expireBucket = req.query.expire_within as string | undefined;
   const sortByRaw = (req.query.sortBy as string) || 'created_at';
   const sortDir = req.query.sortDir === 'asc' ? 'asc' : 'desc';
-  const allowedSort = ['id', 'application_name', 'rule_type', 'expire_date', 'request_date', 'created_at', 'updated_at'];
-  const sortBy = allowedSort.includes(sortByRaw) ? sortByRaw : 'created_at';
+  const allowedSort = [
+    'id', 'application_name', 'rule_type', 'expire_date', 'request_date', 'created_at', 'updated_at',
+    'protocol', 'direction', 'ports', 'days_window', 'time_window', 'sn_call_number', 'engineer_name', 'description',
+  ];
+  const JOIN_SORT: Record<string, string> = { engineer_name: 'e.full_name' };
+  const sortBy = allowedSort.includes(sortByRaw) ? (JOIN_SORT[sortByRaw] ?? `${T}.${sortByRaw}`) : `${T}.created_at`;
 
   const buildWhere = (q: any) => {
     q.whereNull(`${T}.deleted_at`);
@@ -102,7 +107,7 @@ firewallsRouter.get('/', requirePermission('firewalls_view'), async (req: AuthRe
     db(T)
       .leftJoin('employees as e', `${T}.engineer_requested_employee_id`, 'e.id')
       .select(`${T}.*`, 'e.full_name as engineer_name', 'e.employee_code as engineer_code'),
-  ).orderBy(`${T}.${sortBy}`, sortDir).limit(pageSize).offset(offset);
+  ).orderBy(sortBy, sortDir).limit(pageSize).offset(offset);
 
   const countQ = buildWhere(db(T).leftJoin('employees as e', `${T}.engineer_requested_employee_id`, 'e.id')).countDistinct(`${T}.id as total`);
 
@@ -173,3 +178,4 @@ firewallsRouter.post('/:id/restore', requirePermission('firewalls_edit'), async 
   await audit({ userId: req.user!.id, action: 'RESTORE', entityType: 'firewall', entityId: id, ipAddress: req.ip });
   res.json({ success: true });
 });
+

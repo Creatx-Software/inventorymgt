@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import multer from 'multer';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import {
-  ASSET_FIELDS, SIMPLE_FIELDS, parseExcelPreview, suggestMapping, executeImport, executeSimpleImport,
+  ASSET_FIELDS, SIMPLE_FIELDS, parseExcelPreview, suggestMapping, executeImport, executeSimpleImport, executeFirewallImport,
 } from '../services/import.service';
 import { audit } from '../services/audit.service';
 
@@ -49,7 +49,15 @@ importRouter.post('/commit/:assetType', upload.single('file'), async (req: AuthR
   try {
     let result;
 
-    if (SIMPLE_FIELDS[assetType]) {
+    if (assetType === 'firewall') {
+      result = await executeFirewallImport({
+        buffer: req.file.buffer,
+        sheetName,
+        mapping: parsedMapping,
+        dryRun: isDryRun,
+        userId: req.user!.id,
+      });
+    } else if (SIMPLE_FIELDS[assetType]) {
       // Non-asset simple import (incidents / activities)
       result = await executeSimpleImport({
         buffer: req.file.buffer,

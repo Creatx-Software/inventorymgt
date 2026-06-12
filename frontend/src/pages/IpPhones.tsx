@@ -46,10 +46,10 @@ const columns: ColumnDef<IpPhone, any>[] = [
   {
     accessorKey: 'is_recording_enabled',
     header: 'Recording',
-    size: 100,
+    size: 130,
     cell: (i) => i.getValue()
-      ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-      : <span className="text-slate-300">—</span>,
+      ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-50 text-red-600 border border-red-200"><CheckCircle2 className="w-3 h-3" /> Recording</span>
+      : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200">Not Recording</span>,
   },
   ...commonAssetColumns<IpPhone>().slice(4),
 ];

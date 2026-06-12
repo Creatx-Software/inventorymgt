@@ -8,7 +8,8 @@ import { IpInput, IpPills } from '../components/firewall/IpInput';
 import { firewallsApi, type FirewallRule, type ExpireBucket } from '../api/firewalls';
 import { employeesApi } from '../api/lookups';
 import type { Employee, ListParams } from '../types/api';
-import { Calendar, Clock, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, AlertCircle, Upload } from 'lucide-react';
+import { ImportModal } from '../components/import/ImportModal';
 
 const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-GB') : '—');
 
@@ -98,6 +99,7 @@ export default function FirewallsPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [expireBucket, setExpireBucket] = useState<ExpireBucket | ''>('');
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     employeesApi.list({ pageSize: 1000 }).then((r) => setEmployees(r.data)).catch(() => {});
@@ -164,14 +166,10 @@ export default function FirewallsPage() {
   const columns = useMemo<ColumnDef<FirewallRule, any>[]>(() => [
     { accessorKey: 'application_name', header: 'Application', size: 180,
       cell: (i) => <span className="font-medium text-slate-900">{i.getValue() as string}</span> },
-    { accessorKey: 'sources', header: 'Source', size: 220, enableSorting: false,
-      cell: (i) => <IpPills ips={i.row.original.sources} /> },
-    { accessorKey: 'source_nats', header: 'Source Nat', size: 220, enableSorting: false,
-      cell: (i) => <IpPills ips={i.row.original.source_nats} /> },
-    { accessorKey: 'destinations', header: 'Destination', size: 220, enableSorting: false,
-      cell: (i) => <IpPills ips={i.row.original.destinations} /> },
-    { accessorKey: 'destination_nats', header: 'Destination Nat', size: 220, enableSorting: false,
-      cell: (i) => <IpPills ips={i.row.original.destination_nats} /> },
+    { accessorKey: 'sources', header: 'Source', size: 220, enableSorting: false, cell: (i) => <IpPills ips={i.row.original.sources} /> },
+    { accessorKey: 'source_nats', header: 'Source Nat', size: 220, enableSorting: false, cell: (i) => <IpPills ips={i.row.original.source_nats} /> },
+    { accessorKey: 'destinations', header: 'Destination', size: 220, enableSorting: false, cell: (i) => <IpPills ips={i.row.original.destinations} /> },
+    { accessorKey: 'destination_nats', header: 'Destination Nat', size: 220, enableSorting: false, cell: (i) => <IpPills ips={i.row.original.destination_nats} /> },
     { accessorKey: 'ports', header: 'Ports', size: 120, cell: (i) =>
         i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
     { accessorKey: 'protocol', header: 'Protocol', size: 100, cell: (i) =>
@@ -185,7 +183,7 @@ export default function FirewallsPage() {
       cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'sn_call_number', header: 'SN Call #', size: 140, cell: (i) =>
         i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
-    { accessorKey: 'engineer_name', header: 'Engineer', size: 180, enableSorting: false, cell: (i) => {
+    { accessorKey: 'engineer_name', header: 'Engineer', size: 180, cell: (i) => {
         const r = i.row.original;
         if (!r.engineer_name) return <span className="text-slate-300">—</span>;
         return <span>{r.engineer_name}{r.engineer_code ? <span className="text-slate-400 text-xs ml-1">({r.engineer_code})</span> : ''}</span>;
@@ -236,6 +234,19 @@ export default function FirewallsPage() {
         onRestore={async (id) => { await firewallsApi.restore(id); setReloadKey((k) => k + 1); }}
         stickyColumnIds={['application_name']}
         viewKey="firewalls"
+        extraActions={
+          <button onClick={() => setImportOpen(true)} className="btn-secondary">
+            <Upload className="w-4 h-4" /> Import
+          </button>
+        }
+      />
+
+      <ImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        assetType="firewall"
+        title="Firewall Rules"
+        onSuccess={() => setReloadKey((k) => k + 1)}
       />
 
       <Drawer
