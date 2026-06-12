@@ -1,4 +1,5 @@
 import { AssetPage } from '../components/asset/AssetPage';
+import type { FilterFieldDef } from '../components/asset/AssetPage';
 import { commonAssetColumns } from '../components/asset/columns';
 import { ipPhonesApi } from '../api/assets';
 import type { IpPhone } from '../types/assets';
@@ -12,6 +13,19 @@ interface Extra {
 }
 
 const empty: Extra = { mac_address: '', phone_number: '', is_recording_enabled: false };
+
+const extraFilterFields: FilterFieldDef[] = [
+  {
+    key: 'is_recording_enabled',
+    label: 'Recording',
+    type: 'select',
+    options: [
+      { value: '1', label: 'Recording On' },
+      { value: '0', label: 'Recording Off' },
+    ],
+  },
+  { key: 'phone_number', label: 'Phone Number', type: 'text', placeholder: 'Filter by number…' },
+];
 
 const columns: ColumnDef<IpPhone, any>[] = [
   ...commonAssetColumns<IpPhone>().slice(0, 4),
@@ -47,6 +61,7 @@ export default function IpPhonesPage() {
       subtitle="VoIP desk phones"
       resource="ip-phones"
       assetType="ip_phone"
+      extraFilterFields={extraFilterFields}
       api={ipPhonesApi}
       columns={columns}
       stickyColumnIds={['serial_number']}
