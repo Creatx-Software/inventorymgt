@@ -12,7 +12,8 @@ import {
 export type FieldKind =
   | 'text' | 'number' | 'date' | 'bool' | 'time_text' | 'employee_lookup'
   | 'vendor' | 'location' | 'department' | 'employee_name' | 'employee_code' | 'status'
-  | 'enum_endpoint_type' | 'enum_app_tier' | 'enum_server_class' | 'enum_server_type' | 'enum_environment';
+  | 'enum_endpoint_type' | 'enum_app_tier' | 'enum_server_class' | 'enum_server_type' | 'enum_environment'
+  | 'ip_array' | 'enum_protocol' | 'enum_direction' | 'enum_rule_type';
 
 export interface FieldDef {
   key: string;
@@ -218,6 +219,26 @@ async function coerceValue(trx: any, kind: FieldKind, raw: any, ctx: { departmen
       if (v.includes('fb')) return 'FB';
       return null;
     }
+    case 'ip_array': {
+      if (!raw) return JSON.stringify([]);
+      return JSON.stringify(String(raw).split(',').map((s: string) => s.trim()).filter(Boolean));
+    }
+    case 'enum_protocol': {
+      const v = (normVal(raw) || '').toUpperCase();
+      if (v === 'TCP/UDP' || v === 'TCP / UDP') return 'TCP/UDP';
+      if (v === 'UDP') return 'UDP';
+      return 'TCP';
+    }
+    case 'enum_direction': {
+      const v = (normVal(raw) || '').toLowerCase();
+      if (v.includes('bi')) return 'Bi-Directional';
+      return 'Uni-Directional';
+    }
+    case 'enum_rule_type': {
+      const v = (normVal(raw) || '').toLowerCase();
+      if (v.includes('temp')) return 'Temp';
+      return 'Permanent';
+    }
   }
 }
 
@@ -396,6 +417,24 @@ export async function executeImport(args: {
 // ---------------------------------------------------------------------------
 
 export const SIMPLE_FIELDS: Record<string, FieldDef[]> = {
+  firewall: [
+    { key: 'application_name',  label: 'Application Name',           kind: 'text',             aliases: ['application', 'app', 'name'] },
+    { key: 'sources',           label: 'Sources (comma-separated)',   kind: 'ip_array',         aliases: ['source', 'source ip', 'src'] },
+    { key: 'source_nats',       label: 'Source NATs',                 kind: 'ip_array',         aliases: ['source nat', 'src nat', 'snat'] },
+    { key: 'destinations',      label: 'Destinations (comma-separated)', kind: 'ip_array',      aliases: ['destination', 'dest', 'dst', 'destination ip'] },
+    { key: 'destination_nats',  label: 'Destination NATs',            kind: 'ip_array',         aliases: ['destination nat', 'dst nat', 'dnat'] },
+    { key: 'ports',             label: 'Ports',                       kind: 'text',             aliases: ['port', 'port number'] },
+    { key: 'protocol',          label: 'Protocol (TCP/UDP/TCP/UDP)',  kind: 'enum_protocol',    aliases: ['proto'] },
+    { key: 'direction',         label: 'Direction',                   kind: 'enum_direction',   aliases: ['bi/uni', 'bi-directional', 'uni-directional'] },
+    { key: 'rule_type',         label: 'Type (Permanent/Temp)',       kind: 'enum_rule_type',   aliases: ['type', 'rule type', 'temp/permanent'] },
+    { key: 'expire_date',       label: 'Expire Date',                 kind: 'date',             aliases: ['expiry', 'expiry date', 'expires'] },
+    { key: 'days_window',       label: 'Days Window',                 kind: 'text',             aliases: ['days'] },
+    { key: 'time_window',       label: 'Time Window',                 kind: 'text',             aliases: ['time', 'time range'] },
+    { key: 'sn_call_number',    label: 'SN Call Number',              kind: 'text',             aliases: ['sn', 'call number', 'ticket', 'ritm'] },
+    { key: 'raised_by',         label: 'Engineer Requested',          kind: 'employee_lookup',  aliases: ['engineer', 'requested by', 'raised by', 'by'] },
+    { key: 'request_date',      label: 'Request Date',                kind: 'date',             aliases: ['date', 'requested on'] },
+    { key: 'description',       label: 'Description',                 kind: 'text',             aliases: ['desc', 'reason', 'justification', 'notes'] },
+  ],
   incidents: [
     { key: 'date',                label: 'Date',              kind: 'date',            aliases: ['date'] },
     { key: 'start_time',          label: 'Start Time',        kind: 'time_text',       aliases: ['start', 'start time', 'time from'] },
@@ -515,6 +554,94 @@ export async function executeSimpleImport(args: {
         }
 
         if (!args.dryRun) await trx(table).insert(data);
+        result.inserted++;
+      } catch (e: any) {
+        result.errors.push({ row: i + 2, error: e.message });
+      }
+    }
+    if (args.dryRun) throw new Error('__DRY_RUN__');
+  }).catch((e: any) => {
+    if (e.message !== '__DRY_RUN__') throw e;
+  });
+
+  return result;
+}
+
+export async function executeFirewallImport(args: {
+  buffer: Buffer;
+  sheetName: string;
+  mapping: Record<string, string | null>;
+  dryRun: boolean;
+  userId: number;
+}): Promise<ImportResult> {
+  const wb = XLSX.read(args.buffer, { type: 'buffer' });
+  const ws = wb.Sheets[args.sheetName];
+  if (!ws) throw new Error(`Sheet "${args.sheetName}" not found`);
+  const rows = XLSX.utils.sheet_to_json<any>(ws, { defval: null });
+
+  const fields = SIMPLE_FIELDS['firewall'];
+  const fieldByKey = new Map(fields.map((f) => [f.key, f]));
+  const result: ImportResult = { inserted: 0, updated: 0, skipped: 0, duplicates: 0, errors: [] };
+
+  await db.transaction(async (trx) => {
+    const allEmployees = await trx('employees').select('id', 'full_name').where('is_active', true);
+    const empByName = new Map<string, number>(
+      allEmployees.map((e: { id: number; full_name: string }) => [e.full_name.toLowerCase().trim(), e.id]),
+    );
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || Object.values(row).every((v) => v == null || v === '')) {
+        result.skipped++;
+        continue;
+      }
+      try {
+        const data: Record<string, any> = {
+          sources: JSON.stringify([]),
+          source_nats: JSON.stringify([]),
+          destinations: JSON.stringify([]),
+          destination_nats: JSON.stringify([]),
+          protocol: 'TCP',
+          direction: 'Uni-Directional',
+          rule_type: 'Permanent',
+        };
+
+        for (const [excelHeader, fieldKey] of Object.entries(args.mapping)) {
+          if (!fieldKey) continue;
+          const field = fieldByKey.get(fieldKey);
+          if (!field) continue;
+          const raw = row[excelHeader];
+
+          let value: any;
+          switch (field.kind) {
+            case 'date':           value = parseDateToString(raw); break;
+            case 'text':           value = normVal(raw); break;
+            case 'ip_array':       value = JSON.stringify(raw ? String(raw).split(',').map((s: string) => s.trim()).filter(Boolean) : []); break;
+            case 'enum_protocol': {
+              const v = (normVal(raw) || '').toUpperCase();
+              value = v === 'TCP/UDP' || v === 'TCP / UDP' ? 'TCP/UDP' : v === 'UDP' ? 'UDP' : 'TCP';
+              break;
+            }
+            case 'enum_direction': value = (normVal(raw) || '').toLowerCase().includes('bi') ? 'Bi-Directional' : 'Uni-Directional'; break;
+            case 'enum_rule_type': value = (normVal(raw) || '').toLowerCase().includes('temp') ? 'Temp' : 'Permanent'; break;
+            case 'employee_lookup': {
+              const name = normVal(raw);
+              value = name ? (empByName.get(name.toLowerCase().trim()) ?? null) : null;
+              break;
+            }
+            default:               value = normVal(raw);
+          }
+
+          if (fieldKey === 'raised_by') {
+            data.engineer_requested_employee_id = value;
+          } else {
+            data[fieldKey] = value;
+          }
+        }
+
+        if (!data.application_name) { result.skipped++; continue; }
+
+        if (!args.dryRun) await trx('firewall_rules').insert(data);
         result.inserted++;
       } catch (e: any) {
         result.errors.push({ row: i + 2, error: e.message });
