@@ -4,6 +4,8 @@ const commonSearch = ['serial_number', 'sap_asset_code', 'asset_name', 'model', 
 const commonSort = [
   'id', 'serial_number', 'sap_asset_code', 'asset_name', 'model', 'created_at', 'updated_at',
   'vendor_id', 'location_id', 'department_id', 'employee_id', 'status_id',
+  'vendor_name', 'location_name', 'department_name', 'employee_name', 'status_name',
+  'po_number', 'invoice_number', 'remarks',
 ];
 const commonFilter = [
   'serial_number', 'sap_asset_code', 'asset_name', 'model', 'vendor_id',
@@ -50,9 +52,9 @@ export const mobileDevicesRouter = buildAssetRouter({
 export const ipPhonesRouter = buildAssetRouter({
   table: 'ip_phones',
   assetType: 'ip_phone',
-  searchableColumns: [...commonSearch, 'mac_address'],
-  allowedSortColumns: [...commonSort, 'mac_address'],
-  allowedFilterColumns: [...commonFilter, 'mac_address'],
+  searchableColumns: [...commonSearch, 'mac_address', 'phone_number'],
+  allowedSortColumns: [...commonSort, 'mac_address', 'phone_number', 'is_recording_enabled'],
+  allowedFilterColumns: [...commonFilter, 'mac_address', 'phone_number', 'is_recording_enabled'],
   bulkEditableFields: [...commonBulkEditable],
   defaultSort: { column: 'created_at', dir: 'desc' },
 });
