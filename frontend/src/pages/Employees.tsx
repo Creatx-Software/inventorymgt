@@ -5,12 +5,13 @@ import { DataTable } from '../components/table/DataTable';
 import { Drawer } from '../components/ui/Drawer';
 import { employeesApi, departmentsApi, locationsApi } from '../api/lookups';
 import { api } from '../api/client';
+import { assetStatusesApi } from '../api/assets';
 import type { Employee, Department, Location } from '../types/api';
 import clsx from 'clsx';
-import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen, Copy, Check, Download } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen, Copy, Check, Download, Undo2 } from 'lucide-react';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { consumablesApi } from '../api/consumables';
-import type { ConsumableAssignment } from '../types/api';
+import type { EmployeeConsumable } from '../types/api';
 
 interface AssetGroup {
   key: string;
@@ -32,6 +33,11 @@ const typeIcons: Record<string, any> = {
 const typeRoutes: Record<string, string> = {
   endpoint: '/endpoints', monitor: '/monitors', mobile_device: '/mobile-devices', ip_phone: '/ip-phones',
   server: '/servers', printer: '/printers', network_device: '/network-devices', other_asset: '/other-assets',
+};
+
+const typeApiResource: Record<string, string> = {
+  endpoint: 'endpoints', monitor: 'monitors', mobile_device: 'mobile-devices', ip_phone: 'ip-phones',
+  server: 'servers', printer: 'printers', network_device: 'network-devices', other_asset: 'other-assets',
 };
 
 function CopyButton({ value }: { value: string }) {
@@ -64,8 +70,10 @@ export default function EmployeesPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [assets, setAssets] = useState<EmployeeAssets | null>(null);
   const [assetsLoading, setAssetsLoading] = useState(false);
-  const [consumables, setConsumables] = useState<import('../types/api').EmployeeConsumable[] | null>(null);
+  const [consumables, setConsumables] = useState<EmployeeConsumable[] | null>(null);
   const [consumablesLoading, setConsumablesLoading] = useState(false);
+  const [returningId, setReturningId] = useState<number | null>(null);
+  const [returningAssetId, setReturningAssetId] = useState<number | null>(null);
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
@@ -177,6 +185,39 @@ export default function EmployeesPage() {
     if (tab === 'assets' && editing) loadAssets();
     if (tab === 'consumables' && editing) loadConsumables();
   }, [tab, editing]);
+
+  const handleReturnConsumable = async (item: EmployeeConsumable) => {
+    if (!editing) return;
+    if (!confirm(`Return all ${item.net_quantity} ${item.unit} of "${item.name}" from ${editing.full_name}?`)) return;
+    setReturningId(item.consumable_item_id);
+    try {
+      await consumablesApi.returnItem(item.consumable_item_id, {
+        quantity: item.net_quantity,
+        employee_id: editing.id,
+        transaction_date: new Date().toISOString().slice(0, 10),
+      });
+      await loadConsumables();
+    } finally {
+      setReturningId(null);
+    }
+  };
+
+  const handleReturnAsset = async (assetKey: string, asset: { id: number; asset_name: string | null; serial_number: string }) => {
+    if (!editing) return;
+    const label = asset.asset_name || asset.serial_number;
+    if (!confirm(`Return "${label}" from ${editing.full_name}? Status will be set to "In Stores".`)) return;
+    setReturningAssetId(asset.id);
+    try {
+      const statuses = await assetStatusesApi.list();
+      const inStores = statuses.find((s) => s.name === 'In Stores');
+      if (!inStores) throw new Error('Could not find "In Stores" status');
+      const resource = typeApiResource[assetKey];
+      await api.put(`/${resource}/${asset.id}`, { employee_id: null, department_id: null, status_id: inStores.id });
+      await loadAssets();
+    } finally {
+      setReturningAssetId(null);
+    }
+  };
 
   const [exporting, setExporting] = useState(false);
   const downloadAssets = async () => {
@@ -436,13 +477,26 @@ export default function EmployeesPage() {
                         </span>
                       )}
                     </div>
-                    <div className="text-right shrink-0 ml-4">
-                      <div className="text-sm font-semibold text-slate-900">
-                        {item.net_quantity} <span className="font-normal text-slate-500">{item.unit}</span>
+                    <div className="flex items-center gap-3 shrink-0 ml-4">
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-slate-900">
+                          {item.net_quantity} <span className="font-normal text-slate-500">{item.unit}</span>
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {item.total_assigned} assigned · {item.total_returned} returned
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-400">
-                        {item.total_assigned} assigned · {item.total_returned} returned
-                      </div>
+                      <button
+                        onClick={() => handleReturnConsumable(item)}
+                        disabled={returningId === item.consumable_item_id}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition"
+                        title="Return all to stock"
+                      >
+                        {returningId === item.consumable_item_id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Undo2 className="w-3.5 h-3.5" />}
+                        Return
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -474,33 +528,45 @@ export default function EmployeesPage() {
                   </div>
                   <div className="space-y-1">
                     {group.assets.map((asset) => (
-                      <button
-                        key={asset.id}
-                        onClick={() => { setOpen(false); navigate(`${route}?openId=${asset.id}`); }}
-                        className="w-full text-left card p-3 hover:shadow-md hover:-translate-y-0.5 transition-all group flex items-center gap-3"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-slate-900 truncate">
-                            {asset.asset_name || asset.serial_number}
-                          </div>
-                          <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                            <span className="font-mono">{asset.serial_number}</span>
-                            {asset.host_name && <span>· <span className="font-medium text-slate-700">{asset.host_name}</span></span>}
-                            {asset.model && <span>· {asset.model}</span>}
-                          </div>
-                        </div>
-                        <span
-                          className="inline-block px-2 py-0.5 text-[11px] font-medium rounded-full border shrink-0"
-                          style={{
-                            backgroundColor: (asset.status_color || '#64748b') + '15',
-                            borderColor: (asset.status_color || '#64748b') + '40',
-                            color: asset.status_color || '#475569',
-                          }}
+                      <div key={asset.id} className="card p-3 flex items-center gap-3">
+                        <button
+                          onClick={() => { setOpen(false); navigate(`${route}?openId=${asset.id}`); }}
+                          className="flex-1 min-w-0 text-left group flex items-center gap-3"
                         >
-                          {asset.status_name}
-                        </span>
-                        <ExternalLink className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-500 shrink-0" />
-                      </button>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-slate-900 truncate">
+                              {asset.asset_name || asset.serial_number}
+                            </div>
+                            <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                              <span className="font-mono">{asset.serial_number}</span>
+                              {asset.host_name && <span>· <span className="font-medium text-slate-700">{asset.host_name}</span></span>}
+                              {asset.model && <span>· {asset.model}</span>}
+                            </div>
+                          </div>
+                          <span
+                            className="inline-block px-2 py-0.5 text-[11px] font-medium rounded-full border shrink-0"
+                            style={{
+                              backgroundColor: (asset.status_color || '#64748b') + '15',
+                              borderColor: (asset.status_color || '#64748b') + '40',
+                              color: asset.status_color || '#475569',
+                            }}
+                          >
+                            {asset.status_name}
+                          </span>
+                          <ExternalLink className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-500 shrink-0" />
+                        </button>
+                        <button
+                          onClick={() => handleReturnAsset(group.key, asset)}
+                          disabled={returningAssetId === asset.id}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition shrink-0"
+                          title="Return asset — sets status to In Stores"
+                        >
+                          {returningAssetId === asset.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Undo2 className="w-3.5 h-3.5" />}
+                          Return
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>
