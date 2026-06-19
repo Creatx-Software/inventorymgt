@@ -191,6 +191,17 @@ employeeAssetsRouter.get('/:id/export', async (req, res) => {
       Number(r.total_assigned), Number(r.total_returned), Number(r.net_quantity),
     ]);
     XLSX.utils.book_append_sheet(wb, buildSheet(headers, dataRows), 'Consumables');
+
+    // Add consumables to summary (Asset Type = "Consumable", Model = category, Serial = qty held)
+    for (const r of consRows) {
+      summaryRows.push([
+        'Consumable',
+        r.name,
+        r.category ?? '',
+        `Qty: ${Number(r.net_quantity)} ${r.unit}`,
+        '',
+      ]);
+    }
   }
 
   // Summary sheet — employee info block at top, then data table
