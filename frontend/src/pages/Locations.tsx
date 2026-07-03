@@ -5,7 +5,7 @@ import { Drawer } from '../components/ui/Drawer';
 import { locationsApi } from '../api/lookups';
 import { api } from '../api/client';
 import type { Location } from '../types/api';
-import { Users, Package, PackageOpen, Loader2 } from 'lucide-react';
+import { Users, Package, PackageOpen, Loader2, Download } from 'lucide-react';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import {
   RelatedAssetGroups, RelatedEmployeeList, RelatedConsumableList, CountBadge,
@@ -50,6 +50,7 @@ export default function LocationsPage() {
     name: '', type: 'office', country: '', address: '',
   });
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<Tab>('details');
   const [related, setRelated] = useState<RelatedData | null>(null);
@@ -89,6 +90,22 @@ export default function LocationsPage() {
     } finally { setSaving(false); }
   };
 
+  const downloadAssets = async () => {
+    if (!editing) return;
+    setExporting(true);
+    try {
+      const res = await api.get(`/locations/${editing.id}/export`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${editing.name.replace(/[^a-z0-9_\- ]/gi, '_')}_assets.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const remove = async () => {
     if (!editing || !confirm(`Delete "${editing.name}"?`)) return;
     await locationsApi.remove(editing.id);
@@ -121,6 +138,17 @@ export default function LocationsPage() {
           <div className="flex justify-between">
             <div>{editing && <button onClick={remove} className="btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Delete</button>}</div>
             <div className="flex gap-2">
+              {editing && (
+                <button
+                  onClick={downloadAssets}
+                  disabled={exporting}
+                  className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                  title="Export all assets at this location as Excel"
+                >
+                  {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  Export Assets
+                </button>
+              )}
               <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
               <button onClick={save} disabled={saving || !form.name} className="btn-primary">{saving ? 'Saving...' : 'Save'}</button>
             </div>
