@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Copy, Check, Wand2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Copy, Check, Wand2, ExternalLink } from 'lucide-react';
 import type { Vendor, Location, Department, Employee } from '../../types/api';
 import type { AssetStatus } from '../../types/assets';
 import { SearchableSelect } from '../ui/SearchableSelect';
@@ -90,6 +91,7 @@ export function CommonFields({
   employees: Employee[];
   statuses: AssetStatus[];
 }) {
+  const navigate = useNavigate();
   const set = <K extends keyof CommonFormState>(k: K, v: CommonFormState[K]) =>
     onChange({ ...value, [k]: v });
 
@@ -154,7 +156,20 @@ export function CommonFields({
         />
       </div>
       <div>
-        <label className="label flex items-center">Employee (Assigned To) <CopyButton value={employeeDisplay} /></label>
+        <label className="label flex items-center">
+          Employee (Assigned To)
+          <CopyButton value={employeeDisplay} />
+          {value.employee_id && (
+            <button
+              type="button"
+              onClick={() => navigate(`/employees?openId=${value.employee_id}`)}
+              className="ml-1 text-slate-400 hover:text-brand-600 transition-colors"
+              title="Go to employee"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          )}
+        </label>
         <SearchableSelect
           value={value.employee_id}
           onChange={(v) => {

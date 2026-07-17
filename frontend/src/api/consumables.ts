@@ -73,4 +73,15 @@ export const consumablesApi = {
     const r = await api.get(`/consumables/employee/${employeeId}`);
     return r.data;
   },
+
+  updateTransaction: async (txId: number, data: {
+    po_number?: string;
+    invoice_number?: string;
+    reference_number?: string;
+    notes?: string;
+    transaction_date?: string;
+  }): Promise<ConsumableTransaction> => {
+    const r = await api.put(`/consumables/transactions/${txId}`, data);
+    return r.data;
+  },
 };
