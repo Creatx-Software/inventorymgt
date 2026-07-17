@@ -143,7 +143,7 @@ employeeAssetsRouter.get('/:id/export', async (req, res) => {
 
     // Add to summary
     for (const r of rows as any[]) {
-      summaryRows.push([label, r.asset_name ?? '', r.model ?? '', r.serial_number ?? '', r.vendor_name ?? '']);
+      summaryRows.push([label, r.asset_name ?? '', r.model ?? '', r.serial_number ?? '', r.vendor_name ?? '', hasHostName ? (r.host_name ?? '') : '']);
     }
 
     const headers: string[] = [
@@ -200,13 +200,14 @@ employeeAssetsRouter.get('/:id/export', async (req, res) => {
         r.category ?? '',
         `Qty: ${Number(r.net_quantity)} ${r.unit}`,
         '',
+        '',
       ]);
     }
   }
 
   // Summary sheet — employee info block at top, then data table
   if (summaryRows.length > 0) {
-    const summaryHeaders = ['Asset Type', 'Asset Name', 'Model', 'Serial Number', 'Vendor'];
+    const summaryHeaders = ['Asset Type', 'Asset Name', 'Model', 'Serial Number', 'Vendor', 'Host Name'];
     const colCount = summaryHeaders.length;
 
     const INFO_LABEL = {

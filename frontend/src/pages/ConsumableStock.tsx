@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { PackagePlus, ArrowDownToLine, UserPlus, RotateCcw, History, Search, X } from 'lucide-react';
+import { PackagePlus, ArrowDownToLine, UserPlus, RotateCcw, History, Search, X, Pencil, Check } from 'lucide-react';
 import clsx from 'clsx';
 import { DataTable } from '../components/table/DataTable';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
@@ -72,10 +72,35 @@ export default function ConsumableStockPage() {
   const [editingItem, setEditingItem] = useState<ConsumableItem | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
+  const [formTab, setFormTab] = useState<'details' | 'transactions'>('details');
+  const [formTxs, setFormTxs] = useState<ConsumableTransaction[]>([]);
+  const [formTxsLoading, setFormTxsLoading] = useState(false);
+  const [editingTxId, setEditingTxId] = useState<number | null>(null);
+  const [editingTxForm, setEditingTxForm] = useState({ po_number: '', invoice_number: '', reference_number: '', notes: '', transaction_date: '' });
+  const [savingTx, setSavingTx] = useState(false);
+
+  const loadFormTxs = async (item: ConsumableItem) => {
+    setFormTxsLoading(true);
+    try {
+      const txs = await consumablesApi.getTransactions(item.id);
+      setFormTxs(txs);
+    } finally {
+      setFormTxsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (formTab === 'transactions' && editingItem && formTxs.length === 0 && !formTxsLoading) {
+      loadFormTxs(editingItem);
+    }
+  }, [formTab, editingItem]);
 
   const openCreate = () => {
     setEditingItem(null);
     setForm({ ...emptyForm });
+    setFormTab('details');
+    setFormTxs([]);
+    setEditingTxId(null);
     setFormOpen(true);
   };
 
@@ -96,6 +121,9 @@ export default function ConsumableStockPage() {
       initial_po_number: '',
       initial_invoice_number: '',
     });
+    setFormTab('details');
+    setFormTxs([]);
+    setEditingTxId(null);
     setFormOpen(true);
   };
 
@@ -394,13 +422,184 @@ export default function ConsumableStockPage() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => setFormOpen(false)} className="btn-secondary">Cancel</button>
-              <button onClick={saveItem} disabled={saving || !form.name.trim()} className="btn-primary">
-                {saving ? 'Saving…' : 'Save'}
-              </button>
+              {formTab === 'details' && (
+                <button onClick={saveItem} disabled={saving || !form.name.trim()} className="btn-primary">
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+              )}
             </div>
           </div>
         }
       >
+        {/* Tabs — only shown when editing */}
+        {editingItem && (
+          <div className="flex gap-1 mb-5 border-b border-slate-200 -mx-6 px-6">
+            <button
+              onClick={() => setFormTab('details')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition ${formTab === 'details' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+              Details
+            </button>
+            <button
+              onClick={() => { setFormTab('transactions'); setEditingTxId(null); }}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition flex items-center gap-1.5 ${formTab === 'transactions' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+              <History className="w-3.5 h-3.5" />
+              Transactions
+              {formTxs.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-brand-100 text-brand-700">{formTxs.length}</span>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Transactions tab */}
+        {formTab === 'transactions' && editingItem && (
+          <div>
+            {formTxsLoading && (
+              <div className="flex justify-center py-12 text-slate-400 text-sm">Loading…</div>
+            )}
+            {!formTxsLoading && formTxs.length === 0 && (
+              <div className="text-center py-12 text-slate-400 text-sm">No transactions yet.</div>
+            )}
+            {!formTxsLoading && formTxs.length > 0 && (
+              <div className="space-y-2">
+                {formTxs.map((tx) => {
+                  const isEditing = editingTxId === tx.id;
+                  return (
+                    <div key={tx.id} className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1 flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <TxBadge type={tx.transaction_type} />
+                            <span className="font-semibold text-slate-900">{tx.quantity} {editingItem.unit}</span>
+                            <span className="text-slate-400 text-xs">{new Date(tx.transaction_date).toLocaleDateString('en-GB')}</span>
+                          </div>
+                          {tx.employee_name && (
+                            <div className="text-slate-600 text-xs">
+                              {tx.transaction_type === 'assigned' ? 'To' : 'From'}: <strong>{tx.employee_name}</strong>
+                              {tx.employee_code ? ` (${tx.employee_code})` : ''}
+                            </div>
+                          )}
+                          {tx.performed_by_username && (
+                            <div className="text-slate-400 text-xs">by {tx.performed_by_username}</div>
+                          )}
+                        </div>
+                        {canEdit && !isEditing && tx.transaction_type === 'stock_in' && (
+                          <button
+                            onClick={() => {
+                              setEditingTxId(tx.id);
+                              setEditingTxForm({
+                                po_number: tx.po_number || '',
+                                invoice_number: tx.invoice_number || '',
+                                reference_number: tx.reference_number || '',
+                                notes: tx.notes || '',
+                                transaction_date: tx.transaction_date?.slice(0, 10) || '',
+                              });
+                            }}
+                            className="p-1 text-slate-400 hover:text-brand-600 transition shrink-0"
+                            title="Edit transaction"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Inline edit form */}
+                      {isEditing ? (
+                        <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="label text-xs">Date</label>
+                              <input
+                                className="input text-sm"
+                                type="date"
+                                value={editingTxForm.transaction_date}
+                                onChange={(e) => setEditingTxForm({ ...editingTxForm, transaction_date: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="label text-xs">Reference</label>
+                              <input
+                                className="input text-sm"
+                                value={editingTxForm.reference_number}
+                                onChange={(e) => setEditingTxForm({ ...editingTxForm, reference_number: e.target.value })}
+                                placeholder="Delivery ref…"
+                              />
+                            </div>
+                            <div>
+                              <label className="label text-xs">PO Number</label>
+                              <input
+                                className="input text-sm"
+                                value={editingTxForm.po_number}
+                                onChange={(e) => setEditingTxForm({ ...editingTxForm, po_number: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="label text-xs">Invoice Number</label>
+                              <input
+                                className="input text-sm"
+                                value={editingTxForm.invoice_number}
+                                onChange={(e) => setEditingTxForm({ ...editingTxForm, invoice_number: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="label text-xs">Notes</label>
+                            <textarea
+                              className="input text-sm min-h-[50px]"
+                              value={editingTxForm.notes}
+                              onChange={(e) => setEditingTxForm({ ...editingTxForm, notes: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => setEditingTxId(null)}
+                              className="btn-secondary text-xs py-1"
+                            >
+                              <X className="w-3 h-3" /> Cancel
+                            </button>
+                            <button
+                              disabled={savingTx}
+                              onClick={async () => {
+                                setSavingTx(true);
+                                try {
+                                  await consumablesApi.updateTransaction(tx.id, editingTxForm);
+                                  setEditingTxId(null);
+                                  await loadFormTxs(editingItem);
+                                } catch (e: any) {
+                                  alert(e.response?.data?.error || 'Failed to save');
+                                } finally {
+                                  setSavingTx(false);
+                                }
+                              }}
+                              className="btn-primary text-xs py-1"
+                            >
+                              <Check className="w-3 h-3" /> {savingTx ? 'Saving…' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Read-only summary of editable fields */
+                        (tx.po_number || tx.invoice_number || tx.reference_number || tx.notes) && (
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-600 border-t border-slate-100 pt-2">
+                            {tx.po_number && <span><span className="text-slate-400">PO:</span> <span className="font-mono text-slate-900">{tx.po_number}</span></span>}
+                            {tx.invoice_number && <span><span className="text-slate-400">Invoice:</span> <span className="font-mono text-slate-900">{tx.invoice_number}</span></span>}
+                            {tx.reference_number && <span><span className="text-slate-400">Ref:</span> {tx.reference_number}</span>}
+                            {tx.notes && <span className="italic text-slate-500">{tx.notes}</span>}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Details tab (also shown when creating) */}
+        {(formTab === 'details' || !editingItem) && (
         <div className="space-y-4">
           <div>
             <label className="label">Name *</label>
@@ -544,6 +743,7 @@ export default function ConsumableStockPage() {
             </div>
           )}
         </div>
+        )}
       </Drawer>
 
       {/* ── Action drawer (Stock In / Assign / Return) ───────────────────── */}

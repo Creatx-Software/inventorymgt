@@ -439,6 +439,31 @@ consumablesRouter.get('/employee/:employeeId', requirePermission('consumables_vi
   res.json(rows);
 });
 
+// ─── Update a single transaction (PO, invoice, reference, notes, date) ──────
+
+consumablesRouter.put('/transactions/:txId', requirePermission('consumables_edit'), async (req: AuthRequest, res: Response) => {
+  try {
+    const txId = Number(req.params.txId);
+    const { po_number, invoice_number, reference_number, notes, transaction_date } = req.body;
+
+    const tx = await db('consumable_transactions').where({ id: txId }).first();
+    if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+
+    await db('consumable_transactions').where({ id: txId }).update({
+      po_number: po_number?.trim() || null,
+      invoice_number: invoice_number?.trim() || null,
+      reference_number: reference_number?.trim() || null,
+      notes: notes?.trim() || null,
+      transaction_date: transaction_date || tx.transaction_date,
+    });
+
+    const updated = await db('consumable_transactions').where({ id: txId }).first();
+    res.json(updated);
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // ─── Categories list (distinct values) ──────────────────────────────────────
 
 consumablesRouter.get('/meta/categories', requirePermission('consumables_view'), async (_req: AuthRequest, res: Response) => {
