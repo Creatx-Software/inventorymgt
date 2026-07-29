@@ -37,6 +37,7 @@ export interface Endpoint extends AssetCommon {
   eol_date: string | null;
   data_wiped: boolean;
   data_wiped_by: string | null;
+  data_checked_by: string | null;
 }
 
 export interface Monitor extends AssetCommon {
@@ -77,6 +78,7 @@ export interface Server extends AssetCommon {
   hardening_status: boolean;
   patching_status: boolean;
   exception_memo_no: string | null;
+  rack_number: string | null;
 }
 
 export interface Printer extends AssetCommon {

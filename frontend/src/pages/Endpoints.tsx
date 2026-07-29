@@ -30,12 +30,13 @@ interface Extra {
   eol_date: string;
   data_wiped: boolean;
   data_wiped_by: string;
+  data_checked_by: string;
 }
 
 const empty: Extra = {
   endpoint_type: 'Laptop', host_name: '', asset_code: '', mac_address: '',
   os_name_version: '', ip_address: '', is_under_warranty: false,
-  warranty_expiry_date: '', eol_date: '', data_wiped: false, data_wiped_by: '',
+  warranty_expiry_date: '', eol_date: '', data_wiped: false, data_wiped_by: '', data_checked_by: '',
 };
 
 const columns: ColumnDef<Endpoint, any>[] = [
@@ -58,7 +59,10 @@ const columns: ColumnDef<Endpoint, any>[] = [
       <div>
         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-700">Wiped</span>
         {i.row.original.data_wiped_by && (
-          <div className="text-xs text-slate-500 mt-0.5 truncate">{i.row.original.data_wiped_by}</div>
+          <div className="text-xs text-slate-500 mt-0.5 truncate">W: {i.row.original.data_wiped_by}</div>
+        )}
+        {i.row.original.data_checked_by && (
+          <div className="text-xs text-slate-500 mt-0.5 truncate">C: {i.row.original.data_checked_by}</div>
         )}
       </div>
     ) : <span className="text-slate-300">—</span>,
@@ -103,6 +107,7 @@ export default function EndpointsPage() {
             eol_date: e.eol_date || null,
             data_wiped: inStores ? e.data_wiped : false,
             data_wiped_by: (inStores && e.data_wiped) ? (e.data_wiped_by || null) : null,
+            data_checked_by: (inStores && e.data_wiped) ? (e.data_checked_by || null) : null,
           };
         }}
         rowToExtra={(r) => ({
@@ -117,6 +122,7 @@ export default function EndpointsPage() {
           eol_date: r.eol_date ? r.eol_date.slice(0, 10) : '',
           data_wiped: r.data_wiped ?? false,
           data_wiped_by: r.data_wiped_by || '',
+          data_checked_by: r.data_checked_by || '',
         })}
         renderExtraFields={(extra, set, common, statuses) => {
           const calculatedEol = parseEolFromPo(common.po_number || '');
@@ -198,20 +204,31 @@ export default function EndpointsPage() {
                       type="checkbox"
                       className="h-4 w-4 rounded border-slate-300 text-emerald-600"
                       checked={extra.data_wiped}
-                      onChange={(e) => set({ ...extra, data_wiped: e.target.checked, data_wiped_by: e.target.checked ? extra.data_wiped_by : '' })}
+                      onChange={(e) => set({ ...extra, data_wiped: e.target.checked, data_wiped_by: e.target.checked ? extra.data_wiped_by : '', data_checked_by: e.target.checked ? extra.data_checked_by : '' })}
                     />
                     Data Wiped
                   </label>
                   {extra.data_wiped && (
-                    <div>
-                      <label className="label">Wiped by (person's name)</label>
-                      <input
-                        className="input"
-                        value={extra.data_wiped_by}
-                        onChange={(e) => set({ ...extra, data_wiped_by: e.target.value })}
-                        placeholder="Enter the name of the person who wiped the data"
-                      />
-                    </div>
+                    <>
+                      <div>
+                        <label className="label">Wiped by (person's name)</label>
+                        <input
+                          className="input"
+                          value={extra.data_wiped_by}
+                          onChange={(e) => set({ ...extra, data_wiped_by: e.target.value })}
+                          placeholder="Enter the name of the person who wiped the data"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Checked by (person's name)</label>
+                        <input
+                          className="input"
+                          value={extra.data_checked_by}
+                          onChange={(e) => set({ ...extra, data_checked_by: e.target.value })}
+                          placeholder="Enter the name of the person who checked the wipe"
+                        />
+                      </div>
+                    </>
                   )}
                 </div>
               )}

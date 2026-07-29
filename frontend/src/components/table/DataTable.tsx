@@ -233,7 +233,10 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
     for (const c of visibleCols) {
       sheetCols.push({ label: typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id, key: c.id });
       if (c.id === 'employee_name') sheetCols.push({ label: 'Employee ID', key: '__emp_code__' });
-      if (c.id === 'data_wiped') sheetCols.push({ label: 'Wiped By', key: '__data_wiped_by__' });
+      if (c.id === 'data_wiped') {
+        sheetCols.push({ label: 'Wiped By', key: '__data_wiped_by__' });
+        sheetCols.push({ label: 'Checked By', key: '__data_checked_by__' });
+      }
     }
 
     const HEADER_STYLE = {
@@ -257,6 +260,8 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
           val = (row as any).employee_code ?? '';
         } else if (col.key === '__data_wiped_by__') {
           val = (row as any).data_wiped_by ?? '';
+        } else if (col.key === '__data_checked_by__') {
+          val = (row as any).data_checked_by ?? '';
         } else {
           val = (row as any)[col.key] ?? '';
           if (BOOL_COLS.has(col.key)) val = val ? 'Yes' : 'No';
@@ -274,6 +279,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
         let val: string;
         if (col.key === '__emp_code__') val = String((row as any).employee_code ?? '');
         else if (col.key === '__data_wiped_by__') val = String((row as any).data_wiped_by ?? '');
+        else if (col.key === '__data_checked_by__') val = String((row as any).data_checked_by ?? '');
         else if (BOOL_COLS.has(col.key)) val = (row as any)[col.key] ? 'Yes' : 'No';
         else val = String((row as any)[col.key] ?? '');
         if (val.length > max) max = val.length;
