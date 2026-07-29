@@ -53,10 +53,15 @@ const columns: ColumnDef<Endpoint, any>[] = [
   { accessorKey: 'warranty_expiry_date', header: 'Warranty Expiry', size: 130, cell: (i) => fmtDate(i.getValue() as string) },
   { accessorKey: 'eol_date', header: 'EOL', size: 110, cell: (i) => fmtDate(i.getValue() as string) },
   {
-    accessorKey: 'data_wiped', header: 'Data Wiped', size: 110,
-    cell: (i) => i.getValue()
-      ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-700">Wiped</span>
-      : <span className="text-slate-300">—</span>,
+    accessorKey: 'data_wiped', header: 'Data Wiped', size: 160,
+    cell: (i) => i.getValue() ? (
+      <div>
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-700">Wiped</span>
+        {i.row.original.data_wiped_by && (
+          <div className="text-xs text-slate-500 mt-0.5 truncate">{i.row.original.data_wiped_by}</div>
+        )}
+      </div>
+    ) : <span className="text-slate-300">—</span>,
   },
 ];
 

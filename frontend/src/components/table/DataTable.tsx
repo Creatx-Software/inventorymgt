@@ -233,6 +233,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
     for (const c of visibleCols) {
       sheetCols.push({ label: typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id, key: c.id });
       if (c.id === 'employee_name') sheetCols.push({ label: 'Employee ID', key: '__emp_code__' });
+      if (c.id === 'data_wiped') sheetCols.push({ label: 'Wiped By', key: '__data_wiped_by__' });
     }
 
     const HEADER_STYLE = {
@@ -246,10 +247,20 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
 
     const styledHeader = sheetCols.map((col) => ({ v: col.label, t: 's', s: HEADER_STYLE }));
 
+    const BOOL_COLS = new Set(['is_under_warranty', 'data_wiped', 'hardening_status', 'patching_status']);
+
     const styledRows = data.map((row, ri) => {
       const s = ri % 2 === 0 ? ROW_EVEN : ROW_ODD;
       return sheetCols.map((col) => {
-        const val = col.key === '__emp_code__' ? ((row as any).employee_code ?? '') : ((row as any)[col.key] ?? '');
+        let val: any;
+        if (col.key === '__emp_code__') {
+          val = (row as any).employee_code ?? '';
+        } else if (col.key === '__data_wiped_by__') {
+          val = (row as any).data_wiped_by ?? '';
+        } else {
+          val = (row as any)[col.key] ?? '';
+          if (BOOL_COLS.has(col.key)) val = val ? 'Yes' : 'No';
+        }
         return { v: val === '' || val == null ? '' : val, t: typeof val === 'number' ? 'n' : 's', s };
       });
     });
@@ -260,7 +271,11 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
     ws['!cols'] = sheetCols.map((col) => {
       let max = col.label.length;
       data.forEach((row) => {
-        const val = col.key === '__emp_code__' ? String((row as any).employee_code ?? '') : String((row as any)[col.key] ?? '');
+        let val: string;
+        if (col.key === '__emp_code__') val = String((row as any).employee_code ?? '');
+        else if (col.key === '__data_wiped_by__') val = String((row as any).data_wiped_by ?? '');
+        else if (BOOL_COLS.has(col.key)) val = (row as any)[col.key] ? 'Yes' : 'No';
+        else val = String((row as any)[col.key] ?? '');
         if (val.length > max) max = val.length;
       });
       return { wch: Math.min(Math.max(max + 2, 10), 45) };
