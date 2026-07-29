@@ -35,6 +35,8 @@ export interface Endpoint extends AssetCommon {
   is_under_warranty: boolean;
   warranty_expiry_date: string | null;
   eol_date: string | null;
+  data_wiped: boolean;
+  data_wiped_by: string | null;
 }
 
 export interface Monitor extends AssetCommon {

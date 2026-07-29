@@ -28,12 +28,14 @@ interface Extra {
   is_under_warranty: boolean;
   warranty_expiry_date: string;
   eol_date: string;
+  data_wiped: boolean;
+  data_wiped_by: string;
 }
 
 const empty: Extra = {
   endpoint_type: 'Laptop', host_name: '', asset_code: '', mac_address: '',
   os_name_version: '', ip_address: '', is_under_warranty: false,
-  warranty_expiry_date: '', eol_date: '',
+  warranty_expiry_date: '', eol_date: '', data_wiped: false, data_wiped_by: '',
 };
 
 const columns: ColumnDef<Endpoint, any>[] = [
@@ -50,6 +52,12 @@ const columns: ColumnDef<Endpoint, any>[] = [
   ...commonAssetColumns<Endpoint>().slice(5),
   { accessorKey: 'warranty_expiry_date', header: 'Warranty Expiry', size: 130, cell: (i) => fmtDate(i.getValue() as string) },
   { accessorKey: 'eol_date', header: 'EOL', size: 110, cell: (i) => fmtDate(i.getValue() as string) },
+  {
+    accessorKey: 'data_wiped', header: 'Data Wiped', size: 110,
+    cell: (i) => i.getValue()
+      ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-700">Wiped</span>
+      : <span className="text-slate-300">—</span>,
+  },
 ];
 
 export default function EndpointsPage() {
@@ -74,17 +82,24 @@ export default function EndpointsPage() {
           { key: 'ip_address', label: 'IP Address',  type: 'text', placeholder: 'Filter by IP…'   },
         ]}
         emptyExtra={empty}
-        extraToPayload={(e) => ({
-          endpoint_type: e.endpoint_type,
-          host_name: e.host_name || null,
-          asset_code: e.asset_code || null,
-          mac_address: e.mac_address || null,
-          os_name_version: e.os_name_version || null,
-          ip_address: e.ip_address || null,
-          is_under_warranty: e.is_under_warranty,
-          warranty_expiry_date: e.warranty_expiry_date || null,
-          eol_date: e.eol_date || null,
-        })}
+        extraToPayload={(e, common) => {
+          const statusName = (common as any).statusName ?? '';
+          // Only persist wipe data when In Stores; clear it otherwise
+          const inStores = statusName === 'In Stores';
+          return {
+            endpoint_type: e.endpoint_type,
+            host_name: e.host_name || null,
+            asset_code: e.asset_code || null,
+            mac_address: e.mac_address || null,
+            os_name_version: e.os_name_version || null,
+            ip_address: e.ip_address || null,
+            is_under_warranty: e.is_under_warranty,
+            warranty_expiry_date: e.warranty_expiry_date || null,
+            eol_date: e.eol_date || null,
+            data_wiped: inStores ? e.data_wiped : false,
+            data_wiped_by: (inStores && e.data_wiped) ? (e.data_wiped_by || null) : null,
+          };
+        }}
         rowToExtra={(r) => ({
           endpoint_type: r.endpoint_type,
           host_name: r.host_name || '',
@@ -95,10 +110,13 @@ export default function EndpointsPage() {
           is_under_warranty: r.is_under_warranty,
           warranty_expiry_date: r.warranty_expiry_date ? r.warranty_expiry_date.slice(0, 10) : '',
           eol_date: r.eol_date ? r.eol_date.slice(0, 10) : '',
+          data_wiped: r.data_wiped ?? false,
+          data_wiped_by: r.data_wiped_by || '',
         })}
-        renderExtraFields={(extra, set, common) => {
+        renderExtraFields={(extra, set, common, statuses) => {
           const calculatedEol = parseEolFromPo(common.po_number || '');
           const eolMismatch = calculatedEol && extra.eol_date && extra.eol_date !== calculatedEol;
+          const isInStores = statuses.find((s) => String(s.id) === common.status_id)?.name === 'In Stores';
           return (
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -168,6 +186,30 @@ export default function EndpointsPage() {
                   Currently under warranty / AMC
                 </label>
               </div>
+              {isInStores && (
+                <div className="col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-emerald-600"
+                      checked={extra.data_wiped}
+                      onChange={(e) => set({ ...extra, data_wiped: e.target.checked, data_wiped_by: e.target.checked ? extra.data_wiped_by : '' })}
+                    />
+                    Data Wiped
+                  </label>
+                  {extra.data_wiped && (
+                    <div>
+                      <label className="label">Wiped by (person's name)</label>
+                      <input
+                        className="input"
+                        value={extra.data_wiped_by}
+                        onChange={(e) => set({ ...extra, data_wiped_by: e.target.value })}
+                        placeholder="Enter the name of the person who wiped the data"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         }}
