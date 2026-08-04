@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import {
   Laptop, Monitor, Smartphone, Server, Printer, Network, Phone, Package,
   AlertTriangle, Users, MapPin, Tag, Activity, UserX, Loader2,
-  ArrowRight, Calendar, Flame,
+  ArrowRight, Calendar, Flame, Download,
 } from 'lucide-react';
+import { BulkExportModal } from '../components/export/BulkExportModal';
 import {
   BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer,
   XAxis, YAxis, Tooltip, CartesianGrid, Legend,
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const [activity, setActivity] = useState<RecentActivity[]>([]);
   const [charts, setCharts] = useState<ChartsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -66,10 +68,20 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">Overview of your inventory across all asset types</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-1">Overview of your inventory across all asset types</p>
+        </div>
+        <button
+          onClick={() => setExportOpen(true)}
+          className="btn-secondary shrink-0 flex items-center gap-2"
+        >
+          <Download className="w-4 h-4" /> Export Assets
+        </button>
       </div>
+
+      <BulkExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
 
       {/* Top KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
