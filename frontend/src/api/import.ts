@@ -28,6 +28,7 @@ export interface ImportResult {
   skipped: number;
   duplicates: number;
   errors: { row: number; error: string }[];
+  duplicateRows: { row: number; serial: string }[];
 }
 
 export async function previewImport(assetType: string, file: File): Promise<ImportPreview> {

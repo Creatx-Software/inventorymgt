@@ -264,6 +264,7 @@ export interface ImportResult {
   skipped: number;
   duplicates: number;
   errors: { row: number; error: string }[];
+  duplicateRows: { row: number; serial: string }[];
 }
 
 /**
@@ -292,7 +293,7 @@ export async function executeImport(args: {
   const fieldByKey = new Map(fields.map((f) => [f.key, f]));
   const table = ASSET_TYPE_TO_TABLE[args.assetType];
 
-  const result: ImportResult = { inserted: 0, updated: 0, skipped: 0, duplicates: 0, errors: [] };
+  const result: ImportResult = { inserted: 0, updated: 0, skipped: 0, duplicates: 0, errors: [], duplicateRows: [] };
   const mode: DuplicateMode = args.duplicateMode || 'skip';
 
   await db.transaction(async (trx) => {
@@ -346,6 +347,7 @@ export async function executeImport(args: {
           if (dup) {
             if (mode === 'skip') {
               result.duplicates++;
+              result.duplicateRows.push({ row: i + 2, serial });
               continue;
             }
             // 'update' or 'only': update the existing asset row
@@ -500,7 +502,7 @@ export async function executeSimpleImport(args: {
   const fieldByKey = new Map(fields.map((f) => [f.key, f]));
   const table = args.tableType === 'incidents' ? 'network_incidents' : 'activities';
 
-  const result: ImportResult = { inserted: 0, updated: 0, skipped: 0, duplicates: 0, errors: [] };
+  const result: ImportResult = { inserted: 0, updated: 0, skipped: 0, duplicates: 0, errors: [], duplicateRows: [] };
 
   await db.transaction(async (trx) => {
     const allEmployees = await trx('employees').select('id', 'full_name').where('is_active', true);
@@ -581,7 +583,7 @@ export async function executeFirewallImport(args: {
 
   const fields = SIMPLE_FIELDS['firewall'];
   const fieldByKey = new Map(fields.map((f) => [f.key, f]));
-  const result: ImportResult = { inserted: 0, updated: 0, skipped: 0, duplicates: 0, errors: [] };
+  const result: ImportResult = { inserted: 0, updated: 0, skipped: 0, duplicates: 0, errors: [], duplicateRows: [] };
 
   await db.transaction(async (trx) => {
     const allEmployees = await trx('employees').select('id', 'full_name').where('is_active', true);

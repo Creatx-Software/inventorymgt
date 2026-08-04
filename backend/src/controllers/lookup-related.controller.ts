@@ -276,6 +276,114 @@ lookupRelatedRouter.get('/locations/:id/export', async (req, res) => {
   res.send(buffer);
 });
 
+// =================== BULK ALL-ASSETS EXPORT ===================
+
+lookupRelatedRouter.get('/export/bulk', async (req, res) => {
+  const requested = String(req.query.types || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const tables = requested.length > 0
+    ? EXPORT_TABLES.filter((t) => requested.includes(t.table))
+    : EXPORT_TABLES;
+
+  if (tables.length === 0) return res.status(400).json({ error: 'No valid asset types specified' });
+
+  const wb = XLSX.utils.book_new();
+  const summaryRows: any[][] = [];
+  let totalAssets = 0;
+
+  for (const { table, label, hasHostName, extraCols } of tables) {
+    const cols: string[] = [
+      `${table}.serial_number`, `${table}.asset_name`, `${table}.model`,
+      'vendors.name as vendor_name',
+      'employees.full_name as employee_name',
+      'employees.employee_code as employee_code',
+      'departments.name as department_name',
+      'locations.name as location_name',
+      'asset_statuses.name as status_name',
+      `${table}.po_number`, `${table}.invoice_number`, `${table}.remarks`,
+    ];
+    if (hasHostName) cols.push(`${table}.host_name`);
+    for (const { col } of extraCols) cols.push(`${table}.${col}`);
+
+    const rows = await db(table)
+      .leftJoin('vendors',        `${table}.vendor_id`,     'vendors.id')
+      .leftJoin('employees',      `${table}.employee_id`,   'employees.id')
+      .leftJoin('departments',    `${table}.department_id`, 'departments.id')
+      .leftJoin('locations',      `${table}.location_id`,   'locations.id')
+      .leftJoin('asset_statuses', `${table}.status_id`,     'asset_statuses.id')
+      .whereNull(`${table}.deleted_at`)
+      .select(cols);
+
+    if (rows.length === 0) continue;
+    totalAssets += rows.length;
+
+    for (const r of rows as any[]) {
+      summaryRows.push([
+        label,
+        r.asset_name ?? '', r.model ?? '', r.serial_number ?? '',
+        r.vendor_name ?? '', r.employee_name ?? '', r.employee_code ?? '',
+        r.department_name ?? '', r.location_name ?? '', r.status_name ?? '',
+        hasHostName ? (r.host_name ?? '') : '',
+      ]);
+    }
+
+    const headers: string[] = [
+      'Serial Number', 'Asset Name', 'Model', 'Vendor',
+      'Assigned To', 'Employee ID', 'Department', 'Location', 'Status',
+      'PO Number', 'Invoice Number', 'Remarks',
+    ];
+    if (hasHostName) headers.push('Host Name');
+    for (const { header } of extraCols) headers.push(header);
+
+    const dataRows = (rows as any[]).map((r) => {
+      const row: any[] = [
+        r.serial_number ?? '', r.asset_name ?? '', r.model ?? '',
+        r.vendor_name ?? '', r.employee_name ?? '', r.employee_code ?? '',
+        r.department_name ?? '', r.location_name ?? '', r.status_name ?? '',
+        r.po_number ?? '', r.invoice_number ?? '', r.remarks ?? '',
+      ];
+      if (hasHostName) row.push(r.host_name ?? '');
+      for (const { col } of extraCols) row.push((r as any)[col] ?? '');
+      return row;
+    });
+
+    XLSX.utils.book_append_sheet(wb, buildSheet(headers, dataRows), label.slice(0, 31));
+  }
+
+  // Summary sheet
+  const summaryHeaders = ['Asset Type', 'Asset Name', 'Model', 'Serial Number', 'Vendor', 'Assigned To', 'Employee ID', 'Department', 'Location', 'Status', 'Host Name'];
+  const INFO_LABEL = { fill: { patternType: 'solid', fgColor: { rgb: '1E3A8A' } }, font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11, name: 'Calibri' }, alignment: { horizontal: 'left', vertical: 'center' } };
+  const INFO_VALUE = { fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } }, font: { bold: true, color: { rgb: '1E3A8A' }, sz: 11, name: 'Calibri' }, alignment: { horizontal: 'left', vertical: 'center' } };
+  const EMPTY_CELL = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } } } };
+  const colCount = summaryHeaders.length;
+
+  const totalRow  = [{ v: 'Total Assets', t: 's', s: INFO_LABEL }, { v: totalAssets, t: 'n', s: INFO_VALUE }, ...Array(colCount - 2).fill(EMPTY_CELL)];
+  const exportRow = [{ v: 'Exported',     t: 's', s: INFO_LABEL }, { v: new Date().toISOString().slice(0, 10), t: 's', s: INFO_VALUE }, ...Array(colCount - 2).fill(EMPTY_CELL)];
+  const typesRow  = [{ v: 'Categories',   t: 's', s: INFO_LABEL }, { v: tables.map((t) => t.label).join(', '), t: 's', s: INFO_VALUE }, ...Array(colCount - 2).fill(EMPTY_CELL)];
+
+  const styledHeader = summaryHeaders.map((h) => ({ v: h, t: 's', s: HEADER_STYLE }));
+  const styledRows = summaryRows.map((row, ri) => {
+    const s = ri % 2 === 0 ? ROW_EVEN : ROW_ODD;
+    return row.map((val: any) => ({ v: val === null || val === undefined ? '' : val, t: typeof val === 'number' ? 'n' : 's', s }));
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet([totalRow, exportRow, typesRow, styledHeader, ...styledRows]);
+  ws['!cols'] = summaryHeaders.map((h, ci) => {
+    const maxData = summaryRows.reduce((m, row) => Math.max(m, String(row[ci] ?? '').length), h.length);
+    return { wch: Math.min(45, Math.max(14, maxData + 2)) };
+  });
+  ws['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: 4, topLeftCell: 'A5' }];
+  ws['!rows'] = [{ hpt: 22 }, { hpt: 22 }, { hpt: 22 }, { hpt: 20 }];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Summary');
+  wb.SheetNames = ['Summary', ...wb.SheetNames.filter((n: string) => n !== 'Summary')];
+
+  const buffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="all_assets_${date}.xlsx"`);
+  res.send(buffer);
+});
+
 // =================== VENDORS ===================
 lookupRelatedRouter.get('/vendors/:id/related', async (req, res) => {
   const id = Number(req.params.id);

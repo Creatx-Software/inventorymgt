@@ -1,10 +1,86 @@
 import { useState } from 'react';
-import { X, Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle, ArrowLeft, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import clsx from 'clsx';
 import { previewImport, commitImport, type ImportPreview, type ImportResult, type DuplicateMode } from '../../api/import';
 import { SearchableSelect } from '../ui/SearchableSelect';
 
 type Step = 'upload' | 'mapping' | 'dryrun' | 'done';
+
+function IssueTable({
+  title, color, rows, columns, downloadFilename,
+}: {
+  title: string;
+  color: 'red' | 'amber';
+  rows: { row: number; detail: string }[];
+  columns: [string, string];
+  downloadFilename: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const downloadCsv = () => {
+    const header = columns.join(',');
+    const body = rows.map((r) => `${r.row},"${r.detail.replace(/"/g, '""')}"`).join('\n');
+    const blob = new Blob([`${header}\n${body}`], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = downloadFilename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const colors = color === 'red'
+    ? { border: 'border-red-200', bg: 'bg-red-50', hdr: 'bg-red-100', text: 'text-red-700', badge: 'bg-red-100 text-red-700' }
+    : { border: 'border-amber-200', bg: 'bg-amber-50', hdr: 'bg-amber-100', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-700' };
+
+  return (
+    <div className={`rounded-lg border ${colors.border} overflow-hidden`}>
+      <div className={`flex items-center justify-between px-4 py-3 ${colors.hdr}`}>
+        <div className="flex items-center gap-2">
+          <span className={`text-sm font-semibold ${colors.text}`}>{title}</span>
+          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${colors.badge}`}>{rows.length} rows</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={downloadCsv}
+            className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-300 bg-white rounded-md px-2.5 py-1 transition hover:bg-slate-50"
+            title="Download as CSV"
+          >
+            <Download className="w-3.5 h-3.5" /> Download CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900"
+          >
+            {expanded ? <><ChevronUp className="w-4 h-4" /> Hide</> : <><ChevronDown className="w-4 h-4" /> Show rows</>}
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="max-h-64 overflow-y-auto">
+          <table className="w-full text-xs">
+            <thead className={`sticky top-0 ${colors.hdr}`}>
+              <tr>
+                <th className={`text-left px-4 py-2 font-semibold ${colors.text} w-20`}>{columns[0]}</th>
+                <th className={`text-left px-4 py-2 font-semibold ${colors.text}`}>{columns[1]}</th>
+              </tr>
+            </thead>
+            <tbody className={colors.bg}>
+              {rows.map((r, i) => (
+                <tr key={i} className="border-t border-white/60">
+                  <td className={`px-4 py-1.5 font-mono font-medium ${colors.text}`}>{r.row}</td>
+                  <td className={`px-4 py-1.5 ${colors.text} break-all`}>{r.detail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ImportModal({
   open, onClose, assetType, title, onSuccess,
@@ -227,18 +303,26 @@ export function ImportModal({
                 </div>
               </div>
 
+              {/* Error detail table */}
               {dryRunResult.errors.length > 0 && (
-                <div className="card p-4">
-                  <div className="text-sm font-semibold text-slate-900 mb-2">Errors:</div>
-                  <div className="max-h-48 overflow-y-auto space-y-1 text-xs font-mono">
-                    {dryRunResult.errors.slice(0, 100).map((e, i) => (
-                      <div key={i} className="text-red-600">Row {e.row}: {e.error}</div>
-                    ))}
-                    {dryRunResult.errors.length > 100 && (
-                      <div className="text-slate-500">... and {dryRunResult.errors.length - 100} more</div>
-                    )}
-                  </div>
-                </div>
+                <IssueTable
+                  title={`${dryRunResult.errors.length} Error${dryRunResult.errors.length !== 1 ? 's' : ''}`}
+                  color="red"
+                  rows={dryRunResult.errors.map((e) => ({ row: e.row, detail: e.error }))}
+                  columns={['Row', 'Error']}
+                  downloadFilename="import-errors.csv"
+                />
+              )}
+
+              {/* Duplicate detail table */}
+              {dryRunResult.duplicateRows?.length > 0 && (
+                <IssueTable
+                  title={`${dryRunResult.duplicates} Duplicate Serial${dryRunResult.duplicates !== 1 ? 's' : ''}`}
+                  color="amber"
+                  rows={dryRunResult.duplicateRows.map((d) => ({ row: d.row, detail: d.serial }))}
+                  columns={['Row', 'Serial Number (already exists)']}
+                  downloadFilename="import-duplicates.csv"
+                />
               )}
 
               {/* Duplicate handling — only show if there are any duplicates */}

@@ -16,6 +16,7 @@ interface Extra {
   ip_address: string; host_name: string; asset_code: string; dc_location: string;
   is_under_warranty: boolean; warranty_expiry_date: string; eol_date: string;
   hardening_status: boolean; patching_status: boolean; exception_memo_no: string;
+  rack_number: string;
 }
 
 const empty: Extra = {
@@ -24,7 +25,7 @@ const empty: Extra = {
   os_name_version: '', server_software: '', managed_by: '',
   ip_address: '', host_name: '', asset_code: '', dc_location: '',
   is_under_warranty: false, warranty_expiry_date: '', eol_date: '',
-  hardening_status: false, patching_status: false, exception_memo_no: '',
+  hardening_status: false, patching_status: false, exception_memo_no: '', rack_number: '',
 };
 
 const envBadge = (v: string | null) => {
@@ -42,6 +43,7 @@ const columns: ColumnDef<Server, any>[] = [
   { accessorKey: 'application_name', header: 'Application', size: 200, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
   { accessorKey: 'environment', header: 'Env', size: 90, cell: (i) => envBadge(i.getValue() as string | null) },
   { accessorKey: 'application_tier', header: 'Tier', size: 80, cell: (i) => i.getValue() ?? <span className="text-slate-300">—</span> },
+  { accessorKey: 'rack_number', header: 'Rack Number', size: 120, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
   { accessorKey: 'server_class', header: 'Class', size: 100, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
   { accessorKey: 'server_type', header: 'Type', size: 90, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
   ...commonAssetColumns<Server>().slice(2, 4),
@@ -91,6 +93,7 @@ export default function ServersPage() {
         hardening_status: e.hardening_status,
         patching_status: e.patching_status,
         exception_memo_no: e.exception_memo_no || null,
+        rack_number: e.rack_number || null,
       })}
       rowToExtra={(r) => ({
         application_name: r.application_name || '',
@@ -112,6 +115,7 @@ export default function ServersPage() {
         hardening_status: r.hardening_status,
         patching_status: r.patching_status,
         exception_memo_no: r.exception_memo_no || '',
+        rack_number: r.rack_number || '',
       })}
       renderExtraFields={(extra, set, _common) => (
         <div className="grid grid-cols-2 gap-4">
@@ -155,6 +159,7 @@ export default function ServersPage() {
           <div><label className="label">Warranty Expiry</label><input type="date" className="input" value={extra.warranty_expiry_date} onChange={(e) => set({ ...extra, warranty_expiry_date: e.target.value })} /></div>
           <div><label className="label">EOL Date</label><input type="date" className="input" value={extra.eol_date} onChange={(e) => set({ ...extra, eol_date: e.target.value })} /></div>
           <div className="col-span-2"><label className="label">Exception Memo #</label><input className="input" value={extra.exception_memo_no} onChange={(e) => set({ ...extra, exception_memo_no: e.target.value })} /></div>
+          <div><label className="label">Rack Number</label><input className="input" value={extra.rack_number} onChange={(e) => set({ ...extra, rack_number: e.target.value })} /></div>
           <div className="col-span-2 flex flex-wrap gap-6 pt-2">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-brand-600" checked={extra.is_under_warranty} onChange={(e) => set({ ...extra, is_under_warranty: e.target.checked })} />

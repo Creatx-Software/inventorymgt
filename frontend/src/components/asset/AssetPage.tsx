@@ -37,9 +37,9 @@ export interface AssetPageProps<T extends AssetCommon, ExtraForm extends Record<
   columns: ColumnDef<T, any>[];
   stickyColumnIds?: string[];
   emptyExtra: ExtraForm;
-  extraToPayload: (extra: ExtraForm) => Record<string, any>;
+  extraToPayload: (extra: ExtraForm, common: CommonFormState) => Record<string, any>;
   rowToExtra: (row: T) => ExtraForm;
-  renderExtraFields: (extra: ExtraForm, setExtra: (e: ExtraForm) => void, common: CommonFormState) => ReactNode;
+  renderExtraFields: (extra: ExtraForm, setExtra: (e: ExtraForm) => void, common: CommonFormState, statuses: AssetStatus[]) => ReactNode;
   defaultSorting?: { id: string; desc: boolean }[];
   /** Extra column filter fields specific to this asset type (common filters are added automatically) */
   extraFilterFields?: FilterFieldDef[];
@@ -182,7 +182,9 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
   const save = async () => {
     setSaving(true);
     try {
-      const payload = { ...commonToPayload(common), ...extraToPayload(extra) };
+      const statusName = statuses.find((s) => String(s.id) === common.status_id)?.name ?? '';
+      const commonWithStatus = { ...common, statusName };
+      const payload = { ...commonToPayload(common), ...extraToPayload(extra, commonWithStatus as any) };
       if (editing) await api.update(editing.id, payload);
       else await api.create(payload);
       setOpen(false);
@@ -339,7 +341,7 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
             />
             <div className="border-t border-slate-200 pt-5">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Type-Specific Details</div>
-              {renderExtraFields(extra, setExtra, common)}
+              {renderExtraFields(extra, setExtra, common, statuses)}
             </div>
           </div>
         )}

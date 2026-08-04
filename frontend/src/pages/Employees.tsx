@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '../components/table/DataTable';
+import { DataTable, type FilterFieldDef } from '../components/table/DataTable';
 import { Drawer } from '../components/ui/Drawer';
 import { employeesApi, departmentsApi, locationsApi } from '../api/lookups';
 import { api } from '../api/client';
@@ -93,6 +93,29 @@ export default function EmployeesPage() {
 
   const deptName = (id: number | null) => departments.find((d) => d.id === id)?.name || '—';
   const locName = (id: number | null) => locations.find((l) => l.id === id)?.name || '—';
+
+  const filterFields = useMemo<FilterFieldDef[]>(() => [
+    {
+      key: 'department_id',
+      label: 'Department',
+      type: 'select',
+      options: departments.map((d) => ({ value: String(d.id), label: d.name })),
+    },
+    {
+      key: 'location_id',
+      label: 'Location',
+      type: 'select',
+      options: locations.map((l) => ({ value: String(l.id), label: l.name })),
+    },
+    { key: 'employee_code', label: 'Employee ID', type: 'text', placeholder: 'Filter by employee ID…' },
+    { key: 'email', label: 'Email', type: 'text', placeholder: 'Filter by email…' },
+    {
+      key: 'needs_review',
+      label: 'Needs Review',
+      type: 'select',
+      options: [{ value: '1', label: 'Needs Review' }, { value: '0', label: 'OK' }],
+    },
+  ], [departments, locations]);
 
   const columns: ColumnDef<Employee, any>[] = [
     { accessorKey: 'id', header: 'ID', size: 70 },
@@ -322,6 +345,7 @@ export default function EmployeesPage() {
         onRestore={async (id) => { await employeesApi.restore(id); setReloadKey((k) => k + 1); }}
         stickyColumnIds={['full_name']}
         viewKey="employees"
+        filterFields={filterFields}
         extraActions={({ selectedIds }) => (
           <BulkReviewButton selectedIds={selectedIds} onBulkReview={bulkMarkReviewed} />
         )}
