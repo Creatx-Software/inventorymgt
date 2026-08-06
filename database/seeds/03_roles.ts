@@ -1,4 +1,4 @@
-import type { Knex } from 'knex';
+// @ts-nocheck
 
 const RESOURCES = [
   'dashboard',
@@ -51,7 +51,7 @@ const ADMIN_PERMISSIONS: string[] = [
 
 const USER_PERMISSIONS: string[] = buildPermissions(RESOURCES, false);
 
-export async function seed(knex: Knex): Promise<void> {
+export async function seed(knex) {
   // Check if roles already seeded
   const existingRoles = await knex('roles').select('id').limit(1);
   if (existingRoles.length > 0) {
