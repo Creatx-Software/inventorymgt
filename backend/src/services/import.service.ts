@@ -89,6 +89,7 @@ export const ASSET_FIELDS: Record<string, FieldDef[]> = {
     { key: 'hardening_status', label: 'Hardened', kind: 'bool', aliases: ['hardening'] },
     { key: 'patching_status', label: 'Patched', kind: 'bool', aliases: ['patching', 'patch'] },
     { key: 'exception_memo_no', label: 'Exception Memo #', kind: 'text', aliases: ['exception', 'memo'] },
+    { key: 'rack_number', label: 'Rack Number', kind: 'text', aliases: ['rack'] },
   ],
   printer: [
     ...COMMON_FIELDS,
