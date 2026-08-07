@@ -148,16 +148,125 @@ function buildSheet(headers: string[], dataRows: any[][]): any {
   return ws;
 }
 
-const EXPORT_TABLES = [
-  { table: 'endpoints',       label: 'Endpoints',       hasHostName: true,  extraCols: [{ col: 'ip_address', header: 'IP Address' }, { col: 'os_name_version', header: 'OS / Version' }] },
-  { table: 'monitors',        label: 'Monitors',        hasHostName: true,  extraCols: [] as { col: string; header: string }[] },
-  { table: 'mobile_devices',  label: 'Mobile Devices',  hasHostName: false, extraCols: [{ col: 'mobile_number', header: 'Mobile Number' }, { col: 'imei_number', header: 'IMEI' }] },
-  { table: 'ip_phones',       label: 'IP Phones',       hasHostName: false, extraCols: [] as { col: string; header: string }[] },
-  { table: 'servers',         label: 'Servers',         hasHostName: true,  extraCols: [{ col: 'application_name', header: 'Application' }, { col: 'ip_address', header: 'IP Address' }] },
-  { table: 'printers',        label: 'Printers',        hasHostName: true,  extraCols: [{ col: 'ip_address', header: 'IP Address' }] },
-  { table: 'network_devices', label: 'Network Devices', hasHostName: true,  extraCols: [{ col: 'ip_address', header: 'IP Address' }] },
-  { table: 'other_assets',    label: 'Other Assets',    hasHostName: true,  extraCols: [] as { col: string; header: string }[] },
+const EXPORT_TABLES: {
+  table: string;
+  label: string;
+  extraCols: { col: string; header: string; bool?: boolean }[];
+}[] = [
+  {
+    table: 'endpoints', label: 'Endpoints',
+    extraCols: [
+      { col: 'host_name',           header: 'Host Name' },
+      { col: 'endpoint_type',       header: 'Type' },
+      { col: 'asset_code',          header: 'Asset Code' },
+      { col: 'mac_address',         header: 'MAC Address' },
+      { col: 'ip_address',          header: 'IP Address' },
+      { col: 'os_name_version',     header: 'OS / Version' },
+      { col: 'is_under_warranty',   header: 'Under Warranty', bool: true },
+      { col: 'warranty_expiry_date',header: 'Warranty Expiry' },
+      { col: 'eol_date',            header: 'EOL Date' },
+      { col: 'data_wiped',          header: 'Data Wiped', bool: true },
+      { col: 'data_wiped_by',       header: 'Wiped By' },
+      { col: 'data_checked_by',     header: 'Checked By' },
+    ],
+  },
+  {
+    table: 'monitors', label: 'Monitors',
+    extraCols: [
+      { col: 'host_name', header: 'Host Name' },
+    ],
+  },
+  {
+    table: 'mobile_devices', label: 'Mobile Devices',
+    extraCols: [
+      { col: 'eid',             header: 'EID' },
+      { col: 'mobile_number',   header: 'Mobile Number' },
+      { col: 'sim_number',      header: 'SIM Number' },
+      { col: 'imei_number',     header: 'IMEI' },
+      { col: 'production_year', header: 'Production Year' },
+    ],
+  },
+  {
+    table: 'ip_phones', label: 'IP Phones',
+    extraCols: [],
+  },
+  {
+    table: 'servers', label: 'Servers',
+    extraCols: [
+      { col: 'application_name',    header: 'Application Name' },
+      { col: 'can_id',              header: 'CAN ID' },
+      { col: 'application_tier',    header: 'App Tier' },
+      { col: 'server_class',        header: 'Server Class' },
+      { col: 'server_type',         header: 'Server Type' },
+      { col: 'environment',         header: 'Environment' },
+      { col: 'os_name_version',     header: 'OS / Version' },
+      { col: 'server_software',     header: 'Server Software' },
+      { col: 'managed_by',          header: 'Managed By' },
+      { col: 'ip_address',          header: 'IP Address' },
+      { col: 'host_name',           header: 'Host Name' },
+      { col: 'asset_code',          header: 'Asset Code' },
+      { col: 'dc_location',         header: 'DC Location' },
+      { col: 'rack_number',         header: 'Rack Number' },
+      { col: 'is_under_warranty',   header: 'Under Warranty', bool: true },
+      { col: 'warranty_expiry_date',header: 'Warranty Expiry' },
+      { col: 'eol_date',            header: 'EOL Date' },
+      { col: 'hardening_status',    header: 'Hardened', bool: true },
+      { col: 'patching_status',     header: 'Patched', bool: true },
+      { col: 'exception_memo_no',   header: 'Exception Memo #' },
+    ],
+  },
+  {
+    table: 'printers', label: 'Printers',
+    extraCols: [
+      { col: 'device_name', header: 'Device Name' },
+      { col: 'host_name',   header: 'Host Name' },
+      { col: 'ip_address',  header: 'IP Address' },
+      { col: 'managed_by',  header: 'Managed By' },
+      { col: 'eol_date',    header: 'EOL Date' },
+    ],
+  },
+  {
+    table: 'network_devices', label: 'Network Devices',
+    extraCols: [
+      { col: 'device_name',         header: 'Device Name' },
+      { col: 'host_name',           header: 'Host Name' },
+      { col: 'ip_address',          header: 'IP Address' },
+      { col: 'asset_code',          header: 'Asset Code' },
+      { col: 'managed_by',          header: 'Managed By' },
+      { col: 'warranty_expiry_date',header: 'Warranty Expiry' },
+      { col: 'eol_date',            header: 'EOL Date' },
+    ],
+  },
+  {
+    table: 'other_assets', label: 'Other Assets',
+    extraCols: [
+      { col: 'host_name', header: 'Host Name' },
+    ],
+  },
 ];
+
+function fmtBool(v: any): string { return v ? 'Yes' : 'No'; }
+
+function buildAssetSheet(table: string, extraCols: { col: string; header: string; bool?: boolean }[], rows: any[]): any {
+  const headers = [
+    'Serial Number', 'Asset Name', 'Model', 'Vendor',
+    'Assigned To', 'Employee ID', 'Department', 'Location', 'Status',
+    'PO Number', 'Invoice Number', 'Remarks',
+    ...extraCols.map((c) => c.header),
+  ];
+  const dataRows = rows.map((r) => [
+    r.serial_number ?? '', r.asset_name ?? '', r.model ?? '',
+    r.vendor_name ?? '', r.employee_name ?? '', r.employee_code ?? '',
+    r.department_name ?? '', r.location_name ?? '', r.status_name ?? '',
+    r.po_number ?? '', r.invoice_number ?? '', r.remarks ?? '',
+    ...extraCols.map(({ col, bool }) => {
+      const v = (r as any)[col];
+      if (bool) return fmtBool(v);
+      return v ?? '';
+    }),
+  ]);
+  return buildSheet(headers, dataRows);
+}
 
 lookupRelatedRouter.get('/locations/:id/export', async (req, res) => {
   const locationId = Number(req.params.id);
@@ -169,26 +278,24 @@ lookupRelatedRouter.get('/locations/:id/export', async (req, res) => {
   const summaryRows: any[][] = [];
   let totalAssets = 0;
 
-  for (const { table, label, hasHostName, extraCols } of EXPORT_TABLES) {
+  for (const { table, label, extraCols } of EXPORT_TABLES) {
     const cols: string[] = [
-      `${table}.serial_number`,
-      `${table}.asset_name`,
-      `${table}.model`,
+      `${table}.serial_number`, `${table}.asset_name`, `${table}.model`,
       'vendors.name as vendor_name',
       'employees.full_name as employee_name',
+      'employees.employee_code as employee_code',
       'departments.name as department_name',
+      'locations.name as location_name',
       'asset_statuses.name as status_name',
-      `${table}.po_number`,
-      `${table}.invoice_number`,
-      `${table}.remarks`,
+      `${table}.po_number`, `${table}.invoice_number`, `${table}.remarks`,
+      ...extraCols.map(({ col }) => `${table}.${col}`),
     ];
-    if (hasHostName) cols.push(`${table}.host_name`);
-    for (const { col } of extraCols) cols.push(`${table}.${col}`);
 
     const rows = await db(table)
       .leftJoin('vendors',        `${table}.vendor_id`,     'vendors.id')
       .leftJoin('employees',      `${table}.employee_id`,   'employees.id')
       .leftJoin('departments',    `${table}.department_id`, 'departments.id')
+      .leftJoin('locations',      `${table}.location_id`,   'locations.id')
       .leftJoin('asset_statuses', `${table}.status_id`,     'asset_statuses.id')
       .where(`${table}.location_id`, locationId)
       .whereNull(`${table}.deleted_at`)
@@ -201,49 +308,22 @@ lookupRelatedRouter.get('/locations/:id/export', async (req, res) => {
       summaryRows.push([label, r.asset_name ?? '', r.model ?? '', r.serial_number ?? '', r.vendor_name ?? '', r.employee_name ?? '', r.status_name ?? '']);
     }
 
-    const headers: string[] = [
-      'Serial Number', 'Asset Name', 'Model', 'Vendor',
-      'Assigned To', 'Department', 'Status',
-      'PO Number', 'Invoice Number', 'Remarks',
-    ];
-    if (hasHostName) headers.push('Host Name');
-    for (const { header } of extraCols) headers.push(header);
-
-    const dataRows = (rows as any[]).map((r) => {
-      const row: any[] = [
-        r.serial_number ?? '', r.asset_name ?? '', r.model ?? '',
-        r.vendor_name ?? '', r.employee_name ?? '', r.department_name ?? '',
-        r.status_name ?? '', r.po_number ?? '', r.invoice_number ?? '', r.remarks ?? '',
-      ];
-      if (hasHostName) row.push(r.host_name ?? '');
-      for (const { col } of extraCols) row.push((r as any)[col] ?? '');
-      return row;
-    });
-
-    XLSX.utils.book_append_sheet(wb, buildSheet(headers, dataRows), label.slice(0, 31));
+    XLSX.utils.book_append_sheet(wb, buildAssetSheet(table, extraCols, rows as any[]), label.slice(0, 31));
   }
 
   // Summary sheet
   if (summaryRows.length > 0) {
-    const INFO_LABEL = {
-      fill: { patternType: 'solid', fgColor: { rgb: '1E3A8A' } },
-      font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11, name: 'Calibri' },
-      alignment: { horizontal: 'left', vertical: 'center' },
-    };
-    const INFO_VALUE = {
-      fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } },
-      font: { bold: true, color: { rgb: '1E3A8A' }, sz: 11, name: 'Calibri' },
-      alignment: { horizontal: 'left', vertical: 'center' },
-    };
+    const INFO_LABEL = { fill: { patternType: 'solid', fgColor: { rgb: '1E3A8A' } }, font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11, name: 'Calibri' }, alignment: { horizontal: 'left', vertical: 'center' } };
+    const INFO_VALUE = { fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } }, font: { bold: true, color: { rgb: '1E3A8A' }, sz: 11, name: 'Calibri' }, alignment: { horizontal: 'left', vertical: 'center' } };
     const EMPTY = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } } } };
 
     const summaryHeaders = ['Asset Type', 'Asset Name', 'Model', 'Serial Number', 'Vendor', 'Assigned To', 'Status'];
     const colCount = summaryHeaders.length;
 
-    const nameRow  = [{ v: 'Location',  t: 's', s: INFO_LABEL }, { v: loc.name ?? '',    t: 's', s: INFO_VALUE }, ...Array(colCount - 2).fill(EMPTY)];
-    const typeRow  = [{ v: 'Type',      t: 's', s: INFO_LABEL }, { v: loc.type ?? '',    t: 's', s: INFO_VALUE }, ...Array(colCount - 2).fill(EMPTY)];
-    const cntryRow = [{ v: 'Country',   t: 's', s: INFO_LABEL }, { v: loc.country ?? '', t: 's', s: INFO_VALUE }, ...Array(colCount - 2).fill(EMPTY)];
-    const totalRow = [{ v: 'Total Assets', t: 's', s: INFO_LABEL }, { v: totalAssets, t: 'n', s: INFO_VALUE },    ...Array(colCount - 2).fill(EMPTY)];
+    const nameRow  = [{ v: 'Location',     t: 's', s: INFO_LABEL }, { v: loc.name ?? '',    t: 's', s: INFO_VALUE }, ...Array(colCount - 2).fill(EMPTY)];
+    const typeRow  = [{ v: 'Type',         t: 's', s: INFO_LABEL }, { v: loc.type ?? '',    t: 's', s: INFO_VALUE }, ...Array(colCount - 2).fill(EMPTY)];
+    const cntryRow = [{ v: 'Country',      t: 's', s: INFO_LABEL }, { v: loc.country ?? '', t: 's', s: INFO_VALUE }, ...Array(colCount - 2).fill(EMPTY)];
+    const totalRow = [{ v: 'Total Assets', t: 's', s: INFO_LABEL }, { v: totalAssets,       t: 'n', s: INFO_VALUE }, ...Array(colCount - 2).fill(EMPTY)];
 
     const styledHeader = summaryHeaders.map((h) => ({ v: h, t: 's', s: HEADER_STYLE }));
     const styledRows = summaryRows.map((row, ri) => {
@@ -252,7 +332,6 @@ lookupRelatedRouter.get('/locations/:id/export', async (req, res) => {
     });
 
     const ws = XLSX.utils.aoa_to_sheet([nameRow, typeRow, cntryRow, totalRow, styledHeader, ...styledRows]);
-
     ws['!cols'] = summaryHeaders.map((h, ci) => {
       const maxData = summaryRows.reduce((m, row) => Math.max(m, String(row[ci] ?? '').length), h.length);
       return { wch: Math.min(45, Math.max(14, maxData + 2)) };
@@ -290,7 +369,7 @@ lookupRelatedRouter.get('/export/bulk', async (req, res) => {
   const summaryRows: any[][] = [];
   let totalAssets = 0;
 
-  for (const { table, label, hasHostName, extraCols } of tables) {
+  for (const { table, label, extraCols } of tables) {
     const cols: string[] = [
       `${table}.serial_number`, `${table}.asset_name`, `${table}.model`,
       'vendors.name as vendor_name',
@@ -300,9 +379,8 @@ lookupRelatedRouter.get('/export/bulk', async (req, res) => {
       'locations.name as location_name',
       'asset_statuses.name as status_name',
       `${table}.po_number`, `${table}.invoice_number`, `${table}.remarks`,
+      ...extraCols.map(({ col }) => `${table}.${col}`),
     ];
-    if (hasHostName) cols.push(`${table}.host_name`);
-    for (const { col } of extraCols) cols.push(`${table}.${col}`);
 
     const rows = await db(table)
       .leftJoin('vendors',        `${table}.vendor_id`,     'vendors.id')
@@ -322,35 +400,14 @@ lookupRelatedRouter.get('/export/bulk', async (req, res) => {
         r.asset_name ?? '', r.model ?? '', r.serial_number ?? '',
         r.vendor_name ?? '', r.employee_name ?? '', r.employee_code ?? '',
         r.department_name ?? '', r.location_name ?? '', r.status_name ?? '',
-        hasHostName ? (r.host_name ?? '') : '',
       ]);
     }
 
-    const headers: string[] = [
-      'Serial Number', 'Asset Name', 'Model', 'Vendor',
-      'Assigned To', 'Employee ID', 'Department', 'Location', 'Status',
-      'PO Number', 'Invoice Number', 'Remarks',
-    ];
-    if (hasHostName) headers.push('Host Name');
-    for (const { header } of extraCols) headers.push(header);
-
-    const dataRows = (rows as any[]).map((r) => {
-      const row: any[] = [
-        r.serial_number ?? '', r.asset_name ?? '', r.model ?? '',
-        r.vendor_name ?? '', r.employee_name ?? '', r.employee_code ?? '',
-        r.department_name ?? '', r.location_name ?? '', r.status_name ?? '',
-        r.po_number ?? '', r.invoice_number ?? '', r.remarks ?? '',
-      ];
-      if (hasHostName) row.push(r.host_name ?? '');
-      for (const { col } of extraCols) row.push((r as any)[col] ?? '');
-      return row;
-    });
-
-    XLSX.utils.book_append_sheet(wb, buildSheet(headers, dataRows), label.slice(0, 31));
+    XLSX.utils.book_append_sheet(wb, buildAssetSheet(table, extraCols, rows as any[]), label.slice(0, 31));
   }
 
   // Summary sheet
-  const summaryHeaders = ['Asset Type', 'Asset Name', 'Model', 'Serial Number', 'Vendor', 'Assigned To', 'Employee ID', 'Department', 'Location', 'Status', 'Host Name'];
+  const summaryHeaders = ['Asset Type', 'Asset Name', 'Model', 'Serial Number', 'Vendor', 'Assigned To', 'Employee ID', 'Department', 'Location', 'Status'];
   const INFO_LABEL = { fill: { patternType: 'solid', fgColor: { rgb: '1E3A8A' } }, font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11, name: 'Calibri' }, alignment: { horizontal: 'left', vertical: 'center' } };
   const INFO_VALUE = { fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } }, font: { bold: true, color: { rgb: '1E3A8A' }, sz: 11, name: 'Calibri' }, alignment: { horizontal: 'left', vertical: 'center' } };
   const EMPTY_CELL = { v: '', t: 's', s: { fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } } } };
