@@ -173,6 +173,8 @@ export default function FirewallsPage() {
   };
 
   const columns = useMemo<ColumnDef<FirewallRule, any>[]>(() => [
+    { accessorKey: 'sn_call_number', header: 'SN Call #', size: 140, cell: (i) =>
+        i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
     { accessorKey: 'application_name', header: 'Application', size: 180,
       cell: (i) => <span className="font-medium text-slate-900">{i.getValue() as string}</span> },
     { accessorKey: 'sources', header: 'Source', size: 220, enableSorting: false, cell: (i) => <IpPills ips={i.row.original.sources} /> },
@@ -190,8 +192,6 @@ export default function FirewallsPage() {
       cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'time_window', header: 'Time Window', size: 130,
       cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
-    { accessorKey: 'sn_call_number', header: 'SN Call #', size: 140, cell: (i) =>
-        i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
     { accessorKey: 'engineer_name', header: 'Engineer', size: 180, cell: (i) => {
         const r = i.row.original;
         if (!r.engineer_name) return <span className="text-slate-300">—</span>;
