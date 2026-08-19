@@ -1,143 +1,88 @@
 import { useRef, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
-/**
- * 4-octet IP input with auto-advance on dot/3-digit.
- *
- * The Add control lives in the header next to the label so the input row
- * never overflows horizontally inside a narrow drawer column.
- */
 export function IpInput({
-  label, value, onChange,
+  label, value, onChange, placeholder = 'e.g. 192.168.1.0/24, Any, LAN_Net',
 }: {
   label?: string;
   value: string[];
   onChange: (next: string[]) => void;
+  placeholder?: string;
 }) {
-  const [octets, setOctets] = useState<string[]>(['', '', '', '']);
-  const refs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
+  const [text, setText] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const setOctet = (i: number, v: string) => {
-    // If the value contains dots it's a pasted IP — fill all octets at once
-    if (v.includes('.')) {
-      const parts = v.trim().split('.');
-      if (parts.length === 4) {
-        const filled = parts.map((p) => {
-          const d = p.replace(/\D/g, '').slice(0, 3);
-          return d === '' ? '' : String(Math.min(255, Math.max(0, Number(d))));
-        });
-        setOctets(filled);
-        refs[3].current?.focus();
-        return;
-      }
-    }
-    const digits = v.replace(/\D/g, '').slice(0, 3);
-    const numeric = Math.min(255, Math.max(0, Number(digits || 0)));
-    const clean = digits === '' ? '' : String(numeric);
-    const next = [...octets];
-    next[i] = clean;
-    setOctets(next);
-    if (digits.length === 3 && i < 3) refs[i + 1].current?.focus();
+  const addEntry = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed || value.includes(trimmed)) return;
+    onChange([...value, trimmed]);
   };
 
-  const handleKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === '.') {
+  const commit = () => {
+    addEntry(text);
+    setText('');
+    inputRef.current?.focus();
+  };
+
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
-      if (i < 3) refs[i + 1].current?.focus();
-    } else if (e.key === 'Backspace' && octets[i] === '' && i > 0) {
-      refs[i - 1].current?.focus();
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      addIp();
+      commit();
+    } else if (e.key === 'Backspace' && text === '' && value.length > 0) {
+      onChange(value.slice(0, -1));
     }
   };
 
+  // Support pasting multiple entries split by comma, newline, or semicolon
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    const text = e.clipboardData.getData('text').trim();
-    if (text.includes('.')) {
+    const pasted = e.clipboardData.getData('text');
+    const parts = pasted.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 1) {
       e.preventDefault();
-      const parts = text.split('.');
-      if (parts.length === 4) {
-        const filled = parts.map((p) => {
-          const d = p.replace(/\D/g, '').slice(0, 3);
-          return d === '' ? '' : String(Math.min(255, Math.max(0, Number(d))));
-        });
-        setOctets(filled);
-        refs[3].current?.focus();
-      }
+      const next = [...value];
+      for (const p of parts) if (p && !next.includes(p)) next.push(p);
+      onChange(next);
+      setText('');
     }
   };
 
-  const ipString = octets.every((o) => o !== '') ? octets.join('.') : '';
-  const canAdd = ipString.length > 0 && !value.includes(ipString);
-
-  const addIp = () => {
-    if (!canAdd) return;
-    onChange([...value, ipString]);
-    setOctets(['', '', '', '']);
-    refs[0].current?.focus();
-  };
-
-  const removeIp = (ip: string) => onChange(value.filter((x) => x !== ip));
+  const remove = (entry: string) => onChange(value.filter((x) => x !== entry));
 
   return (
-    <div className="space-y-2">
-      {/* Header: label + Add button */}
-      {label !== undefined && (
-        <div className="flex items-center justify-between">
-          <label className="label mb-0">{label}</label>
-          <button
-            type="button"
-            onClick={addIp}
-            disabled={!canAdd}
-            className="btn-secondary py-1 px-2.5 text-xs"
-            title="Add IP"
+    <div className="space-y-1.5">
+      {label !== undefined && <label className="label mb-0">{label}</label>}
+
+      {/* Tag input box */}
+      <div
+        className="flex flex-wrap gap-1.5 min-h-[38px] px-2.5 py-1.5 input cursor-text"
+        onClick={() => inputRef.current?.focus()}
+      >
+        {value.map((entry) => (
+          <span
+            key={entry}
+            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md text-xs font-mono bg-brand-50 text-brand-700 border border-brand-200 shrink-0"
           >
-            <Plus className="w-3 h-3" /> Add
-          </button>
-        </div>
-      )}
-
-      {/* Octet inputs — even spacing, no overflow */}
-      <div className="flex items-center gap-1.5">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-1.5 flex-1 min-w-0">
-            <input
-              ref={refs[i]}
-              className="input w-full text-center font-mono py-1.5 px-1"
-              inputMode="numeric"
-              maxLength={3}
-              value={octets[i]}
-              onChange={(e) => setOctet(i, e.target.value)}
-              onKeyDown={(e) => handleKey(i, e)}
-              onPaste={handlePaste}
-            />
-            {i < 3 && <span className="text-slate-400 font-mono select-none shrink-0">.</span>}
-          </div>
-        ))}
-      </div>
-
-      {/* Existing IPs as pills (below the boxes) */}
-      {value.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {value.map((ip) => (
-            <span
-              key={ip}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono bg-slate-100 text-slate-700 border border-slate-200"
+            {entry}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); remove(entry); }}
+              className="text-brand-400 hover:text-red-500 transition-colors"
             >
-              {ip}
-              <button
-                type="button"
-                onClick={() => removeIp(ip)}
-                className="text-slate-400 hover:text-red-500"
-                title="Remove"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={handleKey}
+          onPaste={handlePaste}
+          placeholder={value.length === 0 ? placeholder : ''}
+          className="flex-1 min-w-[120px] bg-transparent outline-none text-xs font-mono text-slate-700 placeholder:text-slate-400 placeholder:font-sans"
+        />
+      </div>
+      <p className="text-[11px] text-slate-400">Type then press Enter or , to add. Accepts IPs, subnets (CIDR), hostnames, or named objects.</p>
     </div>
   );
 }
