@@ -7,6 +7,7 @@ import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { IpInput, IpPills } from '../components/firewall/IpInput';
 import { firewallsApi, type FirewallRule, type ExpireBucket } from '../api/firewalls';
 import { employeesApi } from '../api/lookups';
+import { settingsApi } from '../api/settings';
 import type { Employee, ListParams } from '../types/api';
 import { Calendar, Clock, AlertCircle, Upload } from 'lucide-react';
 import { ImportModal } from '../components/import/ImportModal';
@@ -24,7 +25,8 @@ function ruleTypeBadge(type: 'Temp' | 'Permanent') {
   );
 }
 
-function directionBadge(dir: 'Bi-Directional' | 'Uni-Directional') {
+function directionBadge(dir: 'Bi-Directional' | 'Uni-Directional' | null) {
+  if (!dir) return <span className="text-slate-300">—</span>;
   return (
     <span className={clsx(
       'px-2 py-0.5 text-[11px] font-medium rounded-full border',
@@ -62,8 +64,8 @@ interface FormState {
   destinations: string[];
   destination_nats: string[];
   ports: string;
-  protocol: 'TCP' | 'UDP' | 'TCP/UDP';
-  direction: 'Bi-Directional' | 'Uni-Directional';
+  protocol: 'TCP' | 'UDP' | 'TCP/UDP' | '';
+  direction: 'Bi-Directional' | 'Uni-Directional' | '';
   rule_type: 'Temp' | 'Permanent';
   expire_date: string;
   days_window: string;
@@ -76,7 +78,7 @@ interface FormState {
 
 const empty: FormState = {
   application_name: '', sources: [], source_nats: [], destinations: [], destination_nats: [],
-  ports: '', protocol: 'TCP', direction: 'Uni-Directional', rule_type: 'Permanent',
+  ports: '', protocol: '', direction: '', rule_type: 'Permanent',
   expire_date: '', days_window: '', time_window: '',
   sn_call_number: '', engineer_requested_employee_id: '', request_date: '', description: '',
 };
@@ -102,7 +104,14 @@ export default function FirewallsPage() {
   const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
-    employeesApi.list({ pageSize: 1000 }).then((r) => setEmployees(r.data)).catch(() => {});
+    settingsApi.get().then((s) => {
+      const deptId = s.firewall_it_department_id;
+      const params: any = { pageSize: 1000 };
+      if (deptId) params.filters = { department_id: deptId };
+      return employeesApi.list(params);
+    }).then((r) => setEmployees(r.data)).catch(() => {
+      employeesApi.list({ pageSize: 1000 }).then((r) => setEmployees(r.data)).catch(() => {});
+    });
   }, []);
 
   const fetcher = useCallback((p: ListParams) =>
@@ -124,8 +133,8 @@ export default function FirewallsPage() {
       destinations: row.destinations || [],
       destination_nats: row.destination_nats || [],
       ports: row.ports || '',
-      protocol: row.protocol,
-      direction: row.direction,
+      protocol: row.protocol || '',
+      direction: row.direction || '',
       rule_type: row.rule_type,
       expire_date: row.expire_date ? row.expire_date.slice(0, 10) : '',
       days_window: row.days_window || '',
@@ -173,7 +182,7 @@ export default function FirewallsPage() {
     { accessorKey: 'ports', header: 'Ports', size: 120, cell: (i) =>
         i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
     { accessorKey: 'protocol', header: 'Protocol', size: 100, cell: (i) =>
-        <span className="font-mono text-xs">{i.getValue() as string}</span> },
+        i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
     { accessorKey: 'direction', header: 'Direction', size: 110, cell: (i) => directionBadge(i.getValue() as any) },
     { accessorKey: 'rule_type', header: 'Type', size: 110, cell: (i) => ruleTypeBadge(i.getValue() as any) },
     { accessorKey: 'expire_date', header: 'Expire Date', size: 150, cell: (i) => <ExpireCell value={i.getValue() as string | null} /> },
@@ -300,25 +309,25 @@ export default function FirewallsPage() {
               <label className="label">Protocol</label>
               <SearchableSelect
                 value={form.protocol}
-                onChange={(v) => setForm({ ...form, protocol: (v || 'TCP') as any })}
+                onChange={(v) => setForm({ ...form, protocol: (v || '') as any })}
                 options={[
                   { value: 'TCP',     label: 'TCP' },
                   { value: 'UDP',     label: 'UDP' },
                   { value: 'TCP/UDP', label: 'TCP/UDP' },
                 ]}
-                emptyOption={null}
+                emptyOption="— None —"
               />
             </div>
             <div>
               <label className="label">Direction</label>
               <SearchableSelect
                 value={form.direction}
-                onChange={(v) => setForm({ ...form, direction: (v || 'Uni-Directional') as any })}
+                onChange={(v) => setForm({ ...form, direction: (v || '') as any })}
                 options={[
-                  { value: 'Bi-Directional', label: 'Bi-Directional' },
+                  { value: 'Bi-Directional',  label: 'Bi-Directional' },
                   { value: 'Uni-Directional', label: 'Uni-Directional' },
                 ]}
-                emptyOption={null}
+                emptyOption="— None —"
               />
             </div>
             <div>
