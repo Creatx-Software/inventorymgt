@@ -55,6 +55,11 @@ function bodyToData(body: any) {
   };
 }
 
+firewallsRouter.get('/meta/application-names', requirePermission('firewalls_view'), async (_req, res) => {
+  const rows = await db(T).whereNull('deleted_at').distinct('application_name').orderBy('application_name', 'asc');
+  res.json(rows.map((r: any) => r.application_name).filter(Boolean));
+});
+
 firewallsRouter.get('/', requirePermission('firewalls_view'), async (req: AuthRequest, res: Response) => {
   const page = Math.max(1, Number(req.query.page || 1));
   const pageSize = Math.min(500, Math.max(1, Number(req.query.pageSize || 100)));
@@ -69,6 +74,8 @@ firewallsRouter.get('/', requirePermission('firewalls_view'), async (req: AuthRe
   ];
   const JOIN_SORT: Record<string, string> = { engineer_name: 'e.full_name' };
   const sortBy = allowedSort.includes(sortByRaw) ? (JOIN_SORT[sortByRaw] ?? `${T}.${sortByRaw}`) : `${T}.created_at`;
+
+  const q2 = req.query as Record<string, string>;
 
   const buildWhere = (q: any) => {
     q.whereNull(`${T}.deleted_at`);
@@ -86,6 +93,11 @@ firewallsRouter.get('/', requirePermission('firewalls_view'), async (req: AuthRe
           .orWhere('e.full_name', 'like', term);
       });
     }
+    if (q2.application_name)                q.where(`${T}.application_name`, q2.application_name);
+    if (q2.rule_type)                       q.where(`${T}.rule_type`, q2.rule_type);
+    if (q2.protocol)                        q.where(`${T}.protocol`, q2.protocol);
+    if (q2.direction)                       q.where(`${T}.direction`, q2.direction);
+    if (q2.engineer_requested_employee_id)  q.where(`${T}.engineer_requested_employee_id`, q2.engineer_requested_employee_id);
     if (expireBucket) {
       const map: Record<string, number> = { '1d': 1, '1w': 7, '2w': 14, '1m': 30, '3m': 90 };
       const days = map[expireBucket];
