@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import clsx from 'clsx';
-import { DataTable } from '../components/table/DataTable';
+import { DataTable, type FilterFieldDef } from '../components/table/DataTable';
 import { Drawer } from '../components/ui/Drawer';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
-import { IpInput, IpPills } from '../components/firewall/IpInput';
+import { IpInput, IpPills, TagInput } from '../components/firewall/IpInput';
 import { firewallsApi, type FirewallRule, type ExpireBucket } from '../api/firewalls';
 import { employeesApi } from '../api/lookups';
 import { settingsApi } from '../api/settings';
@@ -63,13 +63,11 @@ interface FormState {
   source_nats: string[];
   destinations: string[];
   destination_nats: string[];
-  ports: string;
+  ports: string[];
   protocol: 'TCP' | 'UDP' | 'TCP/UDP' | '';
   direction: 'Bi-Directional' | 'Uni-Directional' | '';
   rule_type: 'Temp' | 'Permanent';
   expire_date: string;
-  days_window: string;
-  time_window: string;
   sn_call_number: string;
   engineer_requested_employee_id: string;
   request_date: string;
@@ -78,8 +76,8 @@ interface FormState {
 
 const empty: FormState = {
   application_name: '', sources: [], source_nats: [], destinations: [], destination_nats: [],
-  ports: '', protocol: '', direction: '', rule_type: 'Permanent',
-  expire_date: '', days_window: '', time_window: '',
+  ports: [], protocol: 'TCP', direction: 'Uni-Directional', rule_type: 'Permanent',
+  expire_date: '',
   sn_call_number: '', engineer_requested_employee_id: '', request_date: '', description: '',
 };
 
@@ -100,6 +98,7 @@ export default function FirewallsPage() {
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [appNames, setAppNames] = useState<string[]>([]);
   const [expireBucket, setExpireBucket] = useState<ExpireBucket | ''>('');
   const [importOpen, setImportOpen] = useState(false);
 
@@ -112,7 +111,29 @@ export default function FirewallsPage() {
     }).then((r) => setEmployees(r.data)).catch(() => {
       employeesApi.list({ pageSize: 1000 }).then((r) => setEmployees(r.data)).catch(() => {});
     });
+    firewallsApi.applicationNames().then(setAppNames).catch(() => {});
   }, []);
+
+  const filterFields = useMemo<FilterFieldDef[]>(() => [
+    { key: 'application_name', label: 'Application Name', type: 'select',
+      options: appNames.map((n) => ({ value: n, label: n })) },
+    { key: 'rule_type', label: 'Rule Type', type: 'select', options: [
+      { value: 'Permanent', label: 'Permanent' },
+      { value: 'Temp', label: 'Temporary' },
+    ]},
+    { key: 'protocol', label: 'Protocol', type: 'select', options: [
+      { value: 'TCP',     label: 'TCP' },
+      { value: 'UDP',     label: 'UDP' },
+      { value: 'TCP/UDP', label: 'TCP/UDP' },
+    ]},
+    { key: 'direction', label: 'Direction', type: 'select', options: [
+      { value: 'Uni-Directional', label: 'Uni-Directional' },
+      { value: 'Bi-Directional',  label: 'Bi-Directional' },
+    ]},
+    { key: 'engineer_requested_employee_id', label: 'Engineer', type: 'select',
+      options: employees.map((e) => ({ value: String(e.id), label: e.full_name })),
+    },
+  ], [employees, appNames]);
 
   const fetcher = useCallback((p: ListParams) =>
     firewallsApi.list({ ...p, expire_within: expireBucket || undefined }),
@@ -132,13 +153,11 @@ export default function FirewallsPage() {
       source_nats: row.source_nats || [],
       destinations: row.destinations || [],
       destination_nats: row.destination_nats || [],
-      ports: row.ports || '',
+      ports: row.ports ? row.ports.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
       protocol: row.protocol || '',
       direction: row.direction || '',
       rule_type: row.rule_type,
       expire_date: row.expire_date ? row.expire_date.slice(0, 10) : '',
-      days_window: row.days_window || '',
-      time_window: row.time_window || '',
       sn_call_number: row.sn_call_number || '',
       engineer_requested_employee_id: row.engineer_requested_employee_id ? String(row.engineer_requested_employee_id) : '',
       request_date: row.request_date ? row.request_date.slice(0, 10) : '',
@@ -153,6 +172,7 @@ export default function FirewallsPage() {
     try {
       const payload: any = {
         ...form,
+        ports: form.ports.length > 0 ? form.ports.join(',') : null,
         engineer_requested_employee_id: form.engineer_requested_employee_id ? Number(form.engineer_requested_employee_id) : null,
         expire_date: form.rule_type === 'Temp' ? form.expire_date || null : null,
       };
@@ -160,6 +180,7 @@ export default function FirewallsPage() {
       else await firewallsApi.create(payload);
       setOpen(false);
       setReloadKey((k) => k + 1);
+      firewallsApi.applicationNames().then(setAppNames).catch(() => {});
     } catch (e: any) {
       alert(e.response?.data?.error || 'Failed to save');
     } finally { setSaving(false); }
@@ -181,17 +202,17 @@ export default function FirewallsPage() {
     { accessorKey: 'source_nats', header: 'Source Nat', size: 220, enableSorting: false, cell: (i) => <IpPills ips={i.row.original.source_nats} /> },
     { accessorKey: 'destinations', header: 'Destination', size: 220, enableSorting: false, cell: (i) => <IpPills ips={i.row.original.destinations} /> },
     { accessorKey: 'destination_nats', header: 'Destination Nat', size: 220, enableSorting: false, cell: (i) => <IpPills ips={i.row.original.destination_nats} /> },
-    { accessorKey: 'ports', header: 'Ports', size: 120, cell: (i) =>
-        i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
+    { accessorKey: 'ports', header: 'Ports', size: 150, enableSorting: false, cell: (i) => {
+        const v = i.getValue() as string | null;
+        if (!v) return <span className="text-slate-300">—</span>;
+        const parts = v.split(',').map((s) => s.trim()).filter(Boolean);
+        return <IpPills ips={parts} max={4} />;
+      } },
     { accessorKey: 'protocol', header: 'Protocol', size: 100, cell: (i) =>
         i.getValue() ? <span className="font-mono text-xs">{i.getValue() as string}</span> : <span className="text-slate-300">—</span> },
     { accessorKey: 'direction', header: 'Direction', size: 110, cell: (i) => directionBadge(i.getValue() as any) },
     { accessorKey: 'rule_type', header: 'Type', size: 110, cell: (i) => ruleTypeBadge(i.getValue() as any) },
     { accessorKey: 'expire_date', header: 'Expire Date', size: 150, cell: (i) => <ExpireCell value={i.getValue() as string | null} /> },
-    { accessorKey: 'days_window', header: 'Days Window', size: 130,
-      cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
-    { accessorKey: 'time_window', header: 'Time Window', size: 130,
-      cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'engineer_name', header: 'Engineer', size: 180, cell: (i) => {
         const r = i.row.original;
         if (!r.engineer_name) return <span className="text-slate-300">—</span>;
@@ -242,6 +263,7 @@ export default function FirewallsPage() {
         onBulkDelete={async (ids) => { await firewallsApi.bulkDelete(ids); setReloadKey((k) => k + 1); }}
         onRestore={async (id) => { await firewallsApi.restore(id); setReloadKey((k) => k + 1); }}
         stickyColumnIds={['application_name']}
+        filterFields={filterFields}
         viewKey="firewalls"
         extraActions={
           <button onClick={() => setImportOpen(true)} className="btn-secondary">
@@ -280,9 +302,13 @@ export default function FirewallsPage() {
       >
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+            <div>
               <label className="label">Application Name *</label>
               <input className="input" value={form.application_name} onChange={(e) => setForm({ ...form, application_name: e.target.value })} autoFocus />
+            </div>
+            <div>
+              <label className="label">SN Call Number</label>
+              <input className="input font-mono" value={form.sn_call_number} onChange={(e) => setForm({ ...form, sn_call_number: e.target.value })} placeholder="RITM1234567" />
             </div>
           </div>
 
@@ -297,12 +323,12 @@ export default function FirewallsPage() {
           {/* Ports + protocol + direction + type */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Ports</label>
-              <input
-                className="input font-mono"
+              <TagInput
+                label="Ports"
                 value={form.ports}
-                onChange={(e) => setForm({ ...form, ports: e.target.value })}
-                placeholder="443 or 8091,8092,8093"
+                onChange={(v) => setForm({ ...form, ports: v })}
+                placeholder="e.g. 443, 8080-8090, Any"
+                hint="Enter or , to add."
               />
             </div>
             <div>
@@ -348,29 +374,15 @@ export default function FirewallsPage() {
           {form.rule_type === 'Temp' && (
             <div className="rounded-lg border border-amber-100 bg-amber-50 p-4 space-y-3">
               <div className="text-sm font-semibold text-amber-800">Temporary Rule Details</div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="label">Expire Date</label>
-                  <input type="date" className="input" value={form.expire_date} onChange={(e) => setForm({ ...form, expire_date: e.target.value })} />
-                </div>
-                <div>
-                  <label className="label">Days Window</label>
-                  <input className="input" value={form.days_window} onChange={(e) => setForm({ ...form, days_window: e.target.value })} placeholder="e.g. 24 hrs" />
-                </div>
-                <div>
-                  <label className="label">Time Window</label>
-                  <input className="input" value={form.time_window} onChange={(e) => setForm({ ...form, time_window: e.target.value })} placeholder="e.g. 24 hrs" />
-                </div>
+              <div>
+                <label className="label">Expire Date</label>
+                <input type="date" className="input" value={form.expire_date} onChange={(e) => setForm({ ...form, expire_date: e.target.value })} />
               </div>
             </div>
           )}
 
           {/* Request info */}
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">SN Call Number</label>
-              <input className="input font-mono" value={form.sn_call_number} onChange={(e) => setForm({ ...form, sn_call_number: e.target.value })} placeholder="RITM1234567" />
-            </div>
             <div>
               <label className="label">Request Date</label>
               <input type="date" className="input" value={form.request_date} onChange={(e) => setForm({ ...form, request_date: e.target.value })} />

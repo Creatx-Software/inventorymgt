@@ -38,9 +38,11 @@ export const firewallsApi = {
     if (params.search)        q.search = params.search;
     if (params.sortBy)        { q.sortBy = params.sortBy; q.sortDir = params.sortDir || 'desc'; }
     if (params.expire_within) q.expire_within = params.expire_within;
+    if (params.filters) Object.assign(q, params.filters);
     const r = await api.get('/firewalls', { params: q });
     return r.data;
   },
+  applicationNames: async (): Promise<string[]> => (await api.get('/firewalls/meta/application-names')).data,
   get:    async (id: number): Promise<FirewallRule> => (await api.get(`/firewalls/${id}`)).data,
   create: async (data: Partial<FirewallRule>) => (await api.post('/firewalls', data)).data,
   update: async (id: number, data: Partial<FirewallRule>) => (await api.put(`/firewalls/${id}`, data)).data,
