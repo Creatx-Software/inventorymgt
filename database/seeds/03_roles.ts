@@ -16,20 +16,30 @@ const RESOURCES = [
   'locations',
   'vendors',
   'audit_logs',
+  'consumables',
+  'notes',
+  'activities',
+  'firewalls',
 ];
 
 const VIEW_ONLY_RESOURCES = new Set(['dashboard', 'audit_logs']);
-const ACTIONS = ['view', 'create', 'edit', 'delete'] as const;
+// notes: no edit action
+const NOTES_ACTIONS = ['view', 'create', 'delete'];
+const ACTIONS = ['view', 'create', 'edit', 'delete'];
 
-function buildPermissions(resources: string[], includeAllActions: boolean): string[] {
-  const perms: string[] = [];
+function buildPermissions(resources, includeAllActions) {
+  const perms = [];
   for (const resource of resources) {
     if (VIEW_ONLY_RESOURCES.has(resource)) {
       perms.push(`${resource}_view`);
-    } else if (includeAllActions) {
-      for (const action of ACTIONS) {
-        perms.push(`${resource}_${action}`);
+    } else if (resource === 'notes') {
+      if (includeAllActions) {
+        for (const action of NOTES_ACTIONS) perms.push(`${resource}_${action}`);
+      } else {
+        perms.push(`${resource}_view`);
       }
+    } else if (includeAllActions) {
+      for (const action of ACTIONS) perms.push(`${resource}_${action}`);
     } else {
       perms.push(`${resource}_view`);
     }
@@ -51,60 +61,37 @@ const ADMIN_PERMISSIONS: string[] = [
 
 const USER_PERMISSIONS: string[] = buildPermissions(RESOURCES, false);
 
-export async function seed(knex) {
-  // Check if roles already seeded
-  const existingRoles = await knex('roles').select('id').limit(1);
-  if (existingRoles.length > 0) {
-    console.log('Roles already seeded, skipping.');
-    return;
+async function upsertRole(knex, name, description) {
+  const existing = await knex('roles').where({ name }).first();
+  if (existing) return existing.id;
+  const [id] = await knex('roles').insert({ name, description, is_system: true });
+  return id;
+}
+
+async function upsertPermissions(knex, roleId, permissions) {
+  for (const permission of permissions) {
+    const exists = await knex('role_permissions').where({ role_id: roleId, permission }).first();
+    if (!exists) {
+      await knex('role_permissions').insert({ role_id: roleId, permission });
+    }
   }
+}
 
-  // Insert the three system roles
-  const [superadminId] = await knex('roles').insert({
-    name: 'superadmin',
-    description: 'Full access to everything including role management',
-    is_system: true,
-  });
+export async function seed(knex) {
+  const superadminId = await upsertRole(knex, 'superadmin', 'Full access to everything including role management');
+  const adminId      = await upsertRole(knex, 'admin',      'Full access except role management');
+  const userId       = await upsertRole(knex, 'user',       'View-only access across all resources');
 
-  const [adminId] = await knex('roles').insert({
-    name: 'admin',
-    description: 'Full access except role management',
-    is_system: true,
-  });
+  await upsertPermissions(knex, superadminId, SUPERADMIN_PERMISSIONS);
+  await upsertPermissions(knex, adminId,      ADMIN_PERMISSIONS);
+  await upsertPermissions(knex, userId,       USER_PERMISSIONS);
 
-  const [userId] = await knex('roles').insert({
-    name: 'user',
-    description: 'View-only access across all resources',
-    is_system: true,
-  });
-
-  // Seed permissions for superadmin
-  const superadminPerms = SUPERADMIN_PERMISSIONS.map((permission) => ({
-    role_id: superadminId,
-    permission,
-  }));
-  await knex('role_permissions').insert(superadminPerms);
-
-  // Seed permissions for admin
-  const adminPerms = ADMIN_PERMISSIONS.map((permission) => ({
-    role_id: adminId,
-    permission,
-  }));
-  await knex('role_permissions').insert(adminPerms);
-
-  // Seed permissions for user
-  const userPerms = USER_PERMISSIONS.map((permission) => ({
-    role_id: userId,
-    permission,
-  }));
-  await knex('role_permissions').insert(userPerms);
-
-  // Update the first (admin) user to superadmin role
+  // Assign superadmin role to first user if not yet assigned
   const firstUser = await knex('users').orderBy('id', 'asc').first();
-  if (firstUser) {
+  if (firstUser && !firstUser.role_id) {
     await knex('users').where({ id: firstUser.id }).update({ role_id: superadminId });
     console.log(`Assigned superadmin role to user: ${firstUser.username}`);
   }
 
-  console.log('Seeded roles: superadmin, admin, user');
+  console.log('Roles seed complete (new permissions upserted).');
 }

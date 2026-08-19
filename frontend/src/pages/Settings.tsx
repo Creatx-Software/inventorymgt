@@ -1,15 +1,43 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, User as UserIcon, KeyRound, Loader2, CheckCircle2, AlertCircle, Keyboard } from 'lucide-react';
+import { Lock, User as UserIcon, KeyRound, Loader2, CheckCircle2, AlertCircle, Keyboard, Shield } from 'lucide-react';
+import { settingsApi } from '../api/settings';
+import { departmentsApi } from '../api/lookups';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
+import type { Department } from '../types/api';
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
+  const isAdmin = isSuperAdmin() || user?.role === 'admin';
+
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [itDeptId, setItDeptId] = useState('');
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    departmentsApi.list({ pageSize: 500 }).then((r) => setDepartments(r.data)).catch(() => {});
+    settingsApi.get().then((s) => setItDeptId(s.firewall_it_department_id ?? '')).catch(() => {});
+  }, [isAdmin]);
+
+  const saveAppSettings = async () => {
+    setSettingsSaving(true);
+    setSettingsMsg(null);
+    try {
+      await settingsApi.update({ firewall_it_department_id: itDeptId || null });
+      setSettingsMsg({ type: 'success', text: 'Settings saved' });
+    } catch {
+      setSettingsMsg({ type: 'error', text: 'Failed to save settings' });
+    } finally { setSettingsSaving(false); }
+  };
 
   const onChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,6 +140,48 @@ export default function Settings() {
           </button>
         </form>
       </div>
+
+      {/* Firewall settings — admin only */}
+      {isAdmin && (
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-md shadow-violet-500/30">
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="font-semibold text-slate-900">Firewall Settings</div>
+              <div className="text-xs text-slate-500">Configure which department is the IT team for firewall rules</div>
+            </div>
+          </div>
+          <div className="space-y-4 max-w-md">
+            <div>
+              <label className="label">IT Team Department</label>
+              <p className="text-xs text-slate-500 mb-2">Only employees from this department will appear in the "Engineer Requested" field in firewall rules.</p>
+              <SearchableSelect
+                value={itDeptId}
+                onChange={(v) => setItDeptId(v)}
+                options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
+                placeholder="— All departments (no filter) —"
+                emptyOption="— All departments (no filter) —"
+              />
+            </div>
+            {settingsMsg && (
+              <div className={`rounded-lg px-3 py-2 text-sm flex items-center gap-2 ${
+                settingsMsg.type === 'success'
+                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                  : 'bg-red-50 border border-red-200 text-red-700'
+              }`}>
+                {settingsMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                {settingsMsg.text}
+              </div>
+            )}
+            <button type="button" className="btn-primary" onClick={saveAppSettings} disabled={settingsSaving}>
+              {settingsSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {settingsSaving ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Keyboard shortcuts */}
       <div className="card p-6">

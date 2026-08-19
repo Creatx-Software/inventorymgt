@@ -22,6 +22,7 @@ import { notesRouter } from './controllers/notes.controller';
 import { activitiesRouter } from './controllers/activities.controller';
 import { lookupRelatedRouter } from './controllers/lookup-related.controller';
 import { firewallsRouter } from './controllers/firewalls.controller';
+import { settingsRouter } from './controllers/settings.controller';
 import { notFound, errorHandler } from './middleware/error';
 
 const app = express();
@@ -62,6 +63,7 @@ app.use(`${env.apiPrefix}/consumables`, consumablesRouter);
 app.use(`${env.apiPrefix}/notes`, notesRouter);
 app.use(`${env.apiPrefix}/activities`, activitiesRouter);
 app.use(`${env.apiPrefix}/firewalls`, firewallsRouter);
+app.use(`${env.apiPrefix}/settings`, settingsRouter);
 app.use(`${env.apiPrefix}`, lookupRelatedRouter);
 
 app.use(notFound);

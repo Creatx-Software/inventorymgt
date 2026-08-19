@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/table/DataTable';
 import { Drawer } from '../components/ui/Drawer';
@@ -37,7 +38,20 @@ export default function DepartmentsPage() {
   const [related, setRelated] = useState<RelatedData | null>(null);
   const [relatedLoading, setRelatedLoading] = useState(false);
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useCallback((p: any) => departmentsApi.list(p), [reloadKey]);
+
+  // Deep link: ?openId=123 opens that department on load
+  useEffect(() => {
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    const id = Number(openId);
+    if (!id) return;
+    departmentsApi.get(id).then((row) => openEdit(row as Department)).catch(() => {});
+    const next = new URLSearchParams(searchParams);
+    next.delete('openId');
+    setSearchParams(next, { replace: true });
+  }, []);
 
   const openNew = () => {
     setEditing(null); setRelated(null); setTab('details');

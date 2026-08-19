@@ -18,6 +18,19 @@ export function IpInput({
   const refs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
 
   const setOctet = (i: number, v: string) => {
+    // If the value contains dots it's a pasted IP — fill all octets at once
+    if (v.includes('.')) {
+      const parts = v.trim().split('.');
+      if (parts.length === 4) {
+        const filled = parts.map((p) => {
+          const d = p.replace(/\D/g, '').slice(0, 3);
+          return d === '' ? '' : String(Math.min(255, Math.max(0, Number(d))));
+        });
+        setOctets(filled);
+        refs[3].current?.focus();
+        return;
+      }
+    }
     const digits = v.replace(/\D/g, '').slice(0, 3);
     const numeric = Math.min(255, Math.max(0, Number(digits || 0)));
     const clean = digits === '' ? '' : String(numeric);
@@ -36,6 +49,22 @@ export function IpInput({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       addIp();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData('text').trim();
+    if (text.includes('.')) {
+      e.preventDefault();
+      const parts = text.split('.');
+      if (parts.length === 4) {
+        const filled = parts.map((p) => {
+          const d = p.replace(/\D/g, '').slice(0, 3);
+          return d === '' ? '' : String(Math.min(255, Math.max(0, Number(d))));
+        });
+        setOctets(filled);
+        refs[3].current?.focus();
+      }
     }
   };
 
@@ -81,6 +110,7 @@ export function IpInput({
               value={octets[i]}
               onChange={(e) => setOctet(i, e.target.value)}
               onKeyDown={(e) => handleKey(i, e)}
+              onPaste={handlePaste}
             />
             {i < 3 && <span className="text-slate-400 font-mono select-none shrink-0">.</span>}
           </div>

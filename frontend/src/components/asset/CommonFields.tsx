@@ -194,6 +194,16 @@ export function CommonFields({
       <div>
         <label className="label flex items-center">
           Location <CopyButton value={locationName} />
+          {value.location_id && (
+            <button
+              type="button"
+              onClick={() => navigate(`/locations?openId=${value.location_id}`)}
+              className="ml-1 text-slate-400 hover:text-brand-600 transition-colors"
+              title="Go to location"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          )}
           {locationAutoFilled && (
             <span className="ml-auto flex items-center gap-1 text-[10px] text-brand-500 font-medium">
               <Wand2 className="w-3 h-3" /> from employee
@@ -209,6 +219,16 @@ export function CommonFields({
       <div>
         <label className="label flex items-center">
           Department <CopyButton value={departmentName} />
+          {value.department_id && (
+            <button
+              type="button"
+              onClick={() => navigate(`/departments?openId=${value.department_id}`)}
+              className="ml-1 text-slate-400 hover:text-brand-600 transition-colors"
+              title="Go to department"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          )}
           {departmentAutoFilled && (
             <span className="ml-auto flex items-center gap-1 text-[10px] text-brand-500 font-medium">
               <Wand2 className="w-3 h-3" /> from employee
