@@ -436,7 +436,11 @@ export default function EmployeesPage() {
               <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div className="col-span-1">
-              <label className="label flex items-center">Department <CopyButton value={deptName(form.department_id ? Number(form.department_id) : null)} /></label>
+              <label className="label flex items-center">Department <CopyButton value={deptName(form.department_id ? Number(form.department_id) : null)} />
+                {form.department_id && (
+                  <button type="button" onClick={() => navigate(`/departments?openId=${form.department_id}`)} className="ml-1 text-slate-400 hover:text-brand-600 transition-colors" title="Go to department"><ExternalLink className="w-3 h-3" /></button>
+                )}
+              </label>
               <SearchableSelect
                 value={form.department_id}
                 onChange={(v) => setForm({ ...form, department_id: v })}
@@ -444,7 +448,11 @@ export default function EmployeesPage() {
               />
             </div>
             <div className="col-span-1">
-              <label className="label flex items-center">Location <CopyButton value={locName(form.location_id ? Number(form.location_id) : null)} /></label>
+              <label className="label flex items-center">Location <CopyButton value={locName(form.location_id ? Number(form.location_id) : null)} />
+                {form.location_id && (
+                  <button type="button" onClick={() => navigate(`/locations?openId=${form.location_id}`)} className="ml-1 text-slate-400 hover:text-brand-600 transition-colors" title="Go to location"><ExternalLink className="w-3 h-3" /></button>
+                )}
+              </label>
               <SearchableSelect
                 value={form.location_id}
                 onChange={(v) => setForm({ ...form, location_id: v })}
