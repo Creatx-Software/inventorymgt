@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, User as UserIcon, KeyRound, Loader2, CheckCircle2, AlertCircle, Keyboard, Shield } from 'lucide-react';
+import { Lock, User as UserIcon, KeyRound, Loader2, CheckCircle2, AlertCircle, Keyboard, Shield, RefreshCw } from 'lucide-react';
 import { settingsApi } from '../api/settings';
 import { departmentsApi } from '../api/lookups';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
@@ -37,6 +37,34 @@ export default function Settings() {
     } catch {
       setSettingsMsg({ type: 'error', text: 'Failed to save settings' });
     } finally { setSettingsSaving(false); }
+  };
+
+  const ASSET_TABLES = [
+    { value: '', label: '— All tables —' },
+    { value: 'endpoints',       label: 'Endpoints' },
+    { value: 'monitors',        label: 'Monitors' },
+    { value: 'mobile_devices',  label: 'Mobile Devices' },
+    { value: 'ip_phones',       label: 'IP Phones' },
+    { value: 'servers',         label: 'Servers' },
+    { value: 'printers',        label: 'Printers' },
+    { value: 'network_devices', label: 'Network Devices' },
+    { value: 'other_assets',    label: 'Other Assets' },
+  ];
+
+  const [syncTable, setSyncTable] = useState('');
+  const [syncDryRun, setSyncDryRun] = useState(true);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  const runSync = async () => {
+    setSyncLoading(true); setSyncResult(null); setSyncError(null);
+    try {
+      const r = await api.post('/settings/sync-employee-location', { table: syncTable || undefined, dryRun: syncDryRun });
+      setSyncResult(r.data);
+    } catch (e: any) {
+      setSyncError(e.response?.data?.error || 'Sync failed');
+    } finally { setSyncLoading(false); }
   };
 
   const onChangePassword = async (e: React.FormEvent) => {
@@ -179,6 +207,89 @@ export default function Settings() {
               {settingsSaving && <Loader2 className="w-4 h-4 animate-spin" />}
               {settingsSaving ? 'Saving...' : 'Save Settings'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sync Employee Location — superadmin only */}
+      {isSuperAdmin() && (
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-500/30">
+              <RefreshCw className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="font-semibold text-slate-900">Sync Employee Location</div>
+              <div className="text-xs text-slate-500">Update asset department & location to match the assigned employee</div>
+            </div>
+          </div>
+
+          <div className="space-y-4 max-w-md">
+            <div>
+              <label className="label">Table</label>
+              <SearchableSelect
+                value={syncTable}
+                onChange={setSyncTable}
+                options={ASSET_TABLES.slice(1)}
+                placeholder="— All tables —"
+                emptyOption="— All tables —"
+              />
+            </div>
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={syncDryRun}
+                onChange={(e) => { setSyncDryRun(e.target.checked); setSyncResult(null); }}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600"
+              />
+              <span className="text-sm text-slate-700">Dry run <span className="text-slate-400">(preview only — nothing will be changed)</span></span>
+            </label>
+
+            {syncError && (
+              <div className="rounded-lg px-3 py-2 text-sm flex items-center gap-2 bg-red-50 border border-red-200 text-red-700">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {syncError}
+              </div>
+            )}
+
+            <button type="button" className="btn-primary" onClick={runSync} disabled={syncLoading}>
+              {syncLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Running...</> : <><RefreshCw className="w-4 h-4" /> {syncDryRun ? 'Preview Changes' : 'Run Sync'}</>}
+            </button>
+
+            {/* Results */}
+            {syncResult && (
+              <div className="space-y-3">
+                <div className={`rounded-lg px-3 py-2 text-sm flex items-center gap-2 ${syncResult.dryRun ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'}`}>
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  {syncResult.dryRun ? 'Dry run complete — ' : 'Sync complete — '}
+                  <span className="font-semibold">{syncResult.summary.updated}</span> asset{syncResult.summary.updated !== 1 ? 's' : ''} {syncResult.dryRun ? 'would be' : ''} updated,&nbsp;
+                  <span className="font-semibold">{syncResult.summary.unchanged}</span> already correct,&nbsp;
+                  <span className="font-semibold">{syncResult.summary.skipped}</span> skipped
+                </div>
+
+                {Object.entries(syncResult.tables as Record<string, any>).map(([tbl, r]: [string, any]) =>
+                  r.results.length > 0 ? (
+                    <div key={tbl}>
+                      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">{tbl.replace(/_/g, ' ')}</div>
+                      <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                        {r.results.map((row: any) => (
+                          <div key={row.serial} className="px-3 py-2 text-xs">
+                            <span className="font-mono font-medium text-slate-700">{row.serial}</span>
+                            <div className="mt-0.5 space-y-0.5">
+                              {row.changes.map((c: string, i: number) => (
+                                <div key={i} className="text-slate-500">{c}</div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null
+                )}
+                {syncResult.summary.updated === 0 && (
+                  <p className="text-sm text-slate-400">All assets already match their employee's department and location.</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
