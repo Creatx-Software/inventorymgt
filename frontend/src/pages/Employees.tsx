@@ -8,7 +8,7 @@ import { api } from '../api/client';
 import { assetStatusesApi } from '../api/assets';
 import type { Employee, Department, Location } from '../types/api';
 import clsx from 'clsx';
-import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen, Copy, Check, Download, Undo2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen, Copy, Check, Download, Undo2, MessageSquare, Send, Trash2, Pencil } from 'lucide-react';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { consumablesApi } from '../api/consumables';
 import type { EmployeeConsumable } from '../types/api';
@@ -60,7 +60,7 @@ export default function EmployeesPage() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [tab, setTab] = useState<'details' | 'assets' | 'consumables'>('details');
+  const [tab, setTab] = useState<'details' | 'assets' | 'consumables' | 'comments'>('details');
   const [form, setForm] = useState({
     employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true, needs_review: false,
   });
@@ -72,6 +72,10 @@ export default function EmployeesPage() {
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [consumables, setConsumables] = useState<EmployeeConsumable[] | null>(null);
   const [consumablesLoading, setConsumablesLoading] = useState(false);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [commentSaving, setCommentSaving] = useState(false);
   const [returningId, setReturningId] = useState<number | null>(null);
   const [returningAssetId, setReturningAssetId] = useState<number | null>(null);
 
@@ -149,6 +153,8 @@ export default function EmployeesPage() {
     setTab('details');
     setAssets(null);
     setConsumables(null);
+    setComments([]);
+    setNewComment('');
     setForm({ employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true, needs_review: false });
     setOpen(true);
   };
@@ -158,6 +164,8 @@ export default function EmployeesPage() {
     setTab('details');
     setAssets(null);
     setConsumables(null);
+    setComments([]);
+    setNewComment('');
     setForm({
       employee_code: row.employee_code || '',
       full_name: row.full_name,
@@ -204,9 +212,35 @@ export default function EmployeesPage() {
     } finally { setConsumablesLoading(false); }
   };
 
+  const loadComments = async () => {
+    if (!editing) return;
+    setCommentsLoading(true);
+    try {
+      const data = await api.get(`/employees/${editing.id}/comments`);
+      setComments(data.data);
+    } finally { setCommentsLoading(false); }
+  };
+
+  const addComment = async () => {
+    if (!newComment.trim() || !editing) return;
+    setCommentSaving(true);
+    try {
+      const { data } = await api.post(`/employees/${editing.id}/comments`, { comment: newComment.trim() });
+      setComments((prev) => [data, ...prev]);
+      setNewComment('');
+    } finally { setCommentSaving(false); }
+  };
+
+  const deleteComment = async (commentId: number) => {
+    if (!confirm('Delete this comment?')) return;
+    await api.delete(`/employees/${editing!.id}/comments/${commentId}`);
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+  };
+
   useEffect(() => {
     if (tab === 'assets' && editing) loadAssets();
     if (tab === 'consumables' && editing) loadConsumables();
+    if (tab === 'comments' && editing) loadComments();
   }, [tab, editing]);
 
   const handleReturnConsumable = async (item: EmployeeConsumable) => {
@@ -291,9 +325,35 @@ export default function EmployeesPage() {
     setReloadKey((k) => k + 1);
   };
 
-  const bulkMarkReviewed = async (ids: number[]) => {
-    await api.post('/employees/bulk-review', { ids });
-    setReloadKey((k) => k + 1);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkEditIds, setBulkEditIds] = useState<number[]>([]);
+  const [bulkPatch, setBulkPatch] = useState<{
+    department_id?: string; location_id?: string; is_active?: string; needs_review?: string;
+  }>({});
+  const [bulkSaving, setBulkSaving] = useState(false);
+
+  const openBulkEdit = (ids: number[]) => {
+    setBulkEditIds(ids);
+    setBulkPatch({});
+    setBulkEditOpen(true);
+  };
+
+  const saveBulkEdit = async () => {
+    if (!bulkEditIds.length) return;
+    const patch: Record<string, any> = {};
+    if (bulkPatch.department_id !== undefined) patch.department_id = (bulkPatch.department_id && bulkPatch.department_id !== 'null') ? Number(bulkPatch.department_id) : null;
+    if (bulkPatch.location_id !== undefined) patch.location_id = (bulkPatch.location_id && bulkPatch.location_id !== 'null') ? Number(bulkPatch.location_id) : null;
+    if (bulkPatch.is_active !== undefined) patch.is_active = bulkPatch.is_active === '1';
+    if (bulkPatch.needs_review !== undefined) patch.needs_review = bulkPatch.needs_review === '1';
+    if (!Object.keys(patch).length) { setBulkEditOpen(false); return; }
+    setBulkSaving(true);
+    try {
+      await api.post('/employees/bulk-edit', { ids: bulkEditIds, patch });
+      setBulkEditOpen(false);
+      setReloadKey((k) => k + 1);
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'Bulk edit failed');
+    } finally { setBulkSaving(false); }
   };
 
   return (
@@ -346,9 +406,13 @@ export default function EmployeesPage() {
         stickyColumnIds={['full_name']}
         viewKey="employees"
         filterFields={filterFields}
-        extraActions={({ selectedIds }) => (
-          <BulkReviewButton selectedIds={selectedIds} onBulkReview={bulkMarkReviewed} />
-        )}
+        extraActions={({ selectedIds }) =>
+          selectedIds.length > 0 ? (
+            <button onClick={() => openBulkEdit(selectedIds)} className="btn bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100">
+              <Pencil className="w-4 h-4" /> Bulk Edit ({selectedIds.length})
+            </button>
+          ) : null
+        }
       />
 
       <Drawer
@@ -417,6 +481,20 @@ export default function EmployeesPage() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setTab('comments')}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition flex items-center gap-1.5 ${
+                tab === 'comments' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              Comments
+              {comments.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-brand-100 text-brand-700">
+                  {comments.length}
+                </span>
+              )}
+            </button>
           </div>
         )}
 
@@ -467,21 +545,15 @@ export default function EmployeesPage() {
               </label>
             </div>
             <div className="col-span-1">
-              {!!form.needs_review && (
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, needs_review: false })}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition"
-                >
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  Needs review — click to clear
-                </button>
-              )}
-              {editing && !form.needs_review && !!editing.needs_review && (
-                <span className="flex items-center gap-1.5 text-sm text-emerald-600">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Will be marked as reviewed on save
-                </span>
-              )}
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600"
+                  checked={!form.needs_review}
+                  onChange={(e) => setForm({ ...form, needs_review: !e.target.checked })}
+                />
+                Reviewed
+              </label>
             </div>
           </div>
         )}
@@ -606,28 +678,123 @@ export default function EmployeesPage() {
             })}
           </div>
         )}
+
+        {/* Comments tab */}
+        {tab === 'comments' && (
+          <div className="space-y-4">
+            {/* Add comment */}
+            <div className="space-y-2">
+              <textarea
+                className="input min-h-[80px] resize-none"
+                placeholder="Add a comment…"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) addComment(); }}
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">Ctrl+Enter to submit</span>
+                <button onClick={addComment} disabled={commentSaving || !newComment.trim()} className="btn-primary py-1.5 px-3 text-sm">
+                  {commentSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Add Comment
+                </button>
+              </div>
+            </div>
+
+            {/* Comments list */}
+            {commentsLoading && <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-brand-600" /></div>}
+            {!commentsLoading && comments.length === 0 && (
+              <div className="text-center text-sm text-slate-400 py-8">No comments yet.</div>
+            )}
+            {!commentsLoading && comments.map((c) => (
+              <div key={c.id} className="card p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-800 whitespace-pre-wrap">{c.comment}</p>
+                    <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
+                      <span className="font-medium text-slate-500">{c.created_by_name}</span>
+                      <span>·</span>
+                      <span>{new Date(c.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => deleteComment(c.id)} className="text-slate-300 hover:text-red-500 transition-colors shrink-0" title="Delete">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Drawer>
+
+      {/* Bulk Edit Modal */}
+      {bulkEditOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="card w-full max-w-md p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-slate-900 mb-1">Bulk Edit</h2>
+            <p className="text-sm text-slate-500 mb-5">
+              Editing <span className="font-semibold text-slate-700">{bulkEditIds.length}</span> employee{bulkEditIds.length !== 1 ? 's' : ''}.
+              Only fields you set below will be updated — leave a field as "— No change —" to skip it.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="label">Department</label>
+                <select
+                  className="input"
+                  value={bulkPatch.department_id ?? ''}
+                  onChange={(e) => setBulkPatch((p) => ({ ...p, department_id: e.target.value === '' ? undefined : e.target.value }))}
+                >
+                  <option value="">— No change —</option>
+                  <option value="null">— Clear (no department) —</option>
+                  {departments.map((d) => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Location</label>
+                <select
+                  className="input"
+                  value={bulkPatch.location_id ?? ''}
+                  onChange={(e) => setBulkPatch((p) => ({ ...p, location_id: e.target.value === '' ? undefined : e.target.value }))}
+                >
+                  <option value="">— No change —</option>
+                  <option value="null">— Clear (no location) —</option>
+                  {locations.map((l) => <option key={l.id} value={String(l.id)}>{l.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Active Status</label>
+                <select
+                  className="input"
+                  value={bulkPatch.is_active ?? ''}
+                  onChange={(e) => setBulkPatch((p) => ({ ...p, is_active: e.target.value === '' ? undefined : e.target.value }))}
+                >
+                  <option value="">— No change —</option>
+                  <option value="1">Active</option>
+                  <option value="0">Inactive</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Review Status</label>
+                <select
+                  className="input"
+                  value={bulkPatch.needs_review ?? ''}
+                  onChange={(e) => setBulkPatch((p) => ({ ...p, needs_review: e.target.value === '' ? undefined : e.target.value }))}
+                >
+                  <option value="">— No change —</option>
+                  <option value="0">Reviewed</option>
+                  <option value="1">Under Review</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setBulkEditOpen(false)} className="btn-secondary">Cancel</button>
+              <button onClick={saveBulkEdit} disabled={bulkSaving} className="btn-primary">
+                {bulkSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Apply Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function BulkReviewButton({ selectedIds, onBulkReview }: { selectedIds: number[]; onBulkReview: (ids: number[]) => Promise<void> }) {
-  const [loading, setLoading] = useState(false);
-
-  if (selectedIds.length === 0) return null;
-
-  const handleClick = async () => {
-    if (!confirm(`Mark ${selectedIds.length} selected employee(s) as reviewed?`)) return;
-    setLoading(true);
-    try {
-      await onBulkReview(selectedIds);
-    } finally { setLoading(false); }
-  };
-
-  return (
-    <button onClick={handleClick} disabled={loading} className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
-      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-      Mark reviewed ({selectedIds.length})
-    </button>
-  );
-}

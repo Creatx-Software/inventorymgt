@@ -2,7 +2,7 @@ import { Router } from 'express';
 // @ts-ignore — xlsx-js-style typings not included; uses same API as xlsx
 import * as XLSX from 'xlsx-js-style';
 import db from '../config/db';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 export const employeeAssetsRouter = Router();
 employeeAssetsRouter.use(authMiddleware);
@@ -272,6 +272,41 @@ employeeAssetsRouter.get('/:id/export', async (req, res) => {
   res.send(buffer);
 });
 
+// Employee comments
+employeeAssetsRouter.get('/:id/comments', async (req, res) => {
+  const rows = await db('employee_comments as c')
+    .join('users as u', 'c.created_by_user_id', 'u.id')
+    .where('c.employee_id', Number(req.params.id))
+    .select('c.*', 'u.full_name as created_by_name')
+    .orderBy('c.created_at', 'desc');
+  res.json(rows);
+});
+
+employeeAssetsRouter.post('/:id/comments', async (req: AuthRequest, res) => {
+  const { comment } = req.body as { comment: string };
+  if (!comment?.trim()) return res.status(400).json({ error: 'Comment is required' });
+  const [id] = await db('employee_comments').insert({
+    employee_id: Number(req.params.id),
+    comment: comment.trim(),
+    created_by_user_id: req.user!.id,
+  });
+  const row = await db('employee_comments as c')
+    .join('users as u', 'c.created_by_user_id', 'u.id')
+    .where('c.id', id)
+    .select('c.*', 'u.full_name as created_by_name')
+    .first();
+  res.status(201).json(row);
+});
+
+employeeAssetsRouter.delete('/:id/comments/:commentId', async (req: AuthRequest, res) => {
+  const comment = await db('employee_comments').where('id', req.params.commentId).first();
+  if (!comment) return res.status(404).json({ error: 'Not found' });
+  if (req.user!.role !== 'superadmin' && comment.created_by_user_id !== req.user!.id)
+    return res.status(403).json({ error: 'You can only delete your own comments' });
+  await db('employee_comments').where('id', req.params.commentId).delete();
+  res.json({ success: true });
+});
+
 // Bulk mark employees as reviewed
 employeeAssetsRouter.post('/bulk-review', async (req, res) => {
   const ids: number[] = req.body?.ids || [];
@@ -279,3 +314,19 @@ employeeAssetsRouter.post('/bulk-review', async (req, res) => {
   const n = await db('employees').whereIn('id', ids).update({ needs_review: false });
   res.json({ updated: n });
 });
+
+// Bulk edit employees
+employeeAssetsRouter.post('/bulk-edit', async (req, res) => {
+  const { ids, patch } = req.body as { ids: number[]; patch: Record<string, any> };
+  if (!ids?.length || !patch) return res.status(400).json({ error: 'ids and patch required' });
+  const allowed = ['department_id', 'location_id', 'is_active', 'needs_review'];
+  const safe: Record<string, any> = {};
+  for (const key of allowed) {
+    if (key in patch) safe[key] = patch[key];
+  }
+  if (!Object.keys(safe).length) return res.status(400).json({ error: 'No valid fields to update' });
+  safe.updated_at = db.fn.now();
+  const n = await db('employees').whereIn('id', ids).update(safe);
+  res.json({ updated: n });
+});
+
