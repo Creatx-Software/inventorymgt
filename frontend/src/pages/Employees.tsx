@@ -6,6 +6,7 @@ import { Drawer } from '../components/ui/Drawer';
 import { employeesApi, departmentsApi, locationsApi } from '../api/lookups';
 import { api } from '../api/client';
 import { assetStatusesApi } from '../api/assets';
+import { settingsApi } from '../api/settings';
 import type { Employee, Department, Location } from '../types/api';
 import clsx from 'clsx';
 import { AlertCircle, CheckCircle2, Laptop, Monitor, Smartphone, Phone, Server, Printer, Network, Package, Loader2, ExternalLink, PackageOpen, Copy, Check, Download, Undo2, MessageSquare, Send, Trash2, Pencil } from 'lucide-react';
@@ -265,11 +266,13 @@ export default function EmployeesPage() {
     if (!confirm(`Return "${label}" from ${editing.full_name}? Status will be set to "In Stores".`)) return;
     setReturningAssetId(asset.id);
     try {
-      const statuses = await assetStatusesApi.list();
+      const [statuses, settings] = await Promise.all([assetStatusesApi.list(), settingsApi.get()]);
       const inStores = statuses.find((s) => s.name === 'In Stores');
       if (!inStores) throw new Error('Could not find "In Stores" status');
+      const patch: Record<string, any> = { employee_id: null, department_id: null, status_id: inStores.id };
+      if (settings.default_return_location_id) patch.location_id = Number(settings.default_return_location_id);
       const resource = typeApiResource[assetKey];
-      await api.put(`/${resource}/${asset.id}`, { employee_id: null, department_id: null, status_id: inStores.id });
+      await api.put(`/${resource}/${asset.id}`, patch);
       await loadAssets();
     } finally {
       setReturningAssetId(null);

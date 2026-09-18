@@ -3,9 +3,9 @@ import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { Lock, User as UserIcon, KeyRound, Loader2, CheckCircle2, AlertCircle, Keyboard, Shield, RefreshCw } from 'lucide-react';
 import { settingsApi } from '../api/settings';
-import { departmentsApi } from '../api/lookups';
+import { departmentsApi, locationsApi } from '../api/lookups';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
-import type { Department } from '../types/api';
+import type { Department, Location } from '../types/api';
 
 export default function Settings() {
   const { user, isSuperAdmin } = useAuth();
@@ -18,21 +18,27 @@ export default function Settings() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [itDeptId, setItDeptId] = useState('');
+  const [returnLocationId, setReturnLocationId] = useState('');
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (!isAdmin) return;
     departmentsApi.list({ pageSize: 500 }).then((r) => setDepartments(r.data)).catch(() => {});
-    settingsApi.get().then((s) => setItDeptId(s.firewall_it_department_id ?? '')).catch(() => {});
+    locationsApi.list({ pageSize: 500 }).then((r) => setLocations(r.data)).catch(() => {});
+    settingsApi.get().then((s) => {
+      setItDeptId(s.firewall_it_department_id ?? '');
+      setReturnLocationId(s.default_return_location_id ?? '');
+    }).catch(() => {});
   }, [isAdmin]);
 
   const saveAppSettings = async () => {
     setSettingsSaving(true);
     setSettingsMsg(null);
     try {
-      await settingsApi.update({ firewall_it_department_id: itDeptId || null });
+      await settingsApi.update({ firewall_it_department_id: itDeptId || null, default_return_location_id: returnLocationId || null });
       setSettingsMsg({ type: 'success', text: 'Settings saved' });
     } catch {
       setSettingsMsg({ type: 'error', text: 'Failed to save settings' });
@@ -191,6 +197,17 @@ export default function Settings() {
                 options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
                 placeholder="— All departments (no filter) —"
                 emptyOption="— All departments (no filter) —"
+              />
+            </div>
+            <div>
+              <label className="label">Default Return Location</label>
+              <p className="text-xs text-slate-500 mb-2">When an asset is returned from an employee, it will be moved to this location automatically.</p>
+              <SearchableSelect
+                value={returnLocationId}
+                onChange={(v) => setReturnLocationId(v)}
+                options={locations.map((l) => ({ value: String(l.id), label: l.name }))}
+                placeholder="— No default (location unchanged) —"
+                emptyOption="— No default (location unchanged) —"
               />
             </div>
             {settingsMsg && (

@@ -250,7 +250,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
 
     const styledHeader = sheetCols.map((col) => ({ v: col.label, t: 's', s: HEADER_STYLE }));
 
-    const BOOL_COLS = new Set(['is_under_warranty', 'data_wiped', 'hardening_status', 'patching_status']);
+    const BOOL_COLS = new Set(['is_under_warranty', 'data_wiped', 'hardening_status', 'patching_status', 'is_recording_enabled']);
 
     const styledRows = data.map((row, ri) => {
       const s = ri % 2 === 0 ? ROW_EVEN : ROW_ODD;
