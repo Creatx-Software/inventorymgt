@@ -67,6 +67,8 @@ export const ASSET_FIELDS: Record<string, FieldDef[]> = {
   ip_phone: [
     ...COMMON_FIELDS,
     { key: 'mac_address', label: 'MAC Address', kind: 'text', aliases: ['mac'] },
+    { key: 'phone_number', label: 'Phone Number', kind: 'text', aliases: ['phone', 'number', 'ext', 'extension'] },
+    { key: 'is_recording_enabled', label: 'Recording Enabled', kind: 'bool', aliases: ['recording', 'record'] },
   ],
   server: [
     ...COMMON_FIELDS,

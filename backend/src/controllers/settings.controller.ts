@@ -78,7 +78,7 @@ settingsRouter.post('/sync-employee-location', async (req: AuthRequest, res) => 
   res.json({ dryRun: !!dryRun, tables: tableResults, summary: { total: grandTotal, updated: grandUpdated, unchanged: grandUnchanged, skipped: grandSkipped } });
 });
 
-const ALLOWED_KEYS = ['firewall_it_department_id'];
+const ALLOWED_KEYS = ['firewall_it_department_id', 'default_return_location_id'];
 
 settingsRouter.get('/', async (_req, res) => {
   const rows = await db('app_settings').whereIn('key', ALLOWED_KEYS);

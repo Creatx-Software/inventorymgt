@@ -2,6 +2,7 @@ import { api } from './client';
 
 export interface AppSettings {
   firewall_it_department_id: string | null;
+  default_return_location_id: string | null;
 }
 
 export const settingsApi = {
