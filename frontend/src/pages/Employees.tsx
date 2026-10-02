@@ -63,7 +63,7 @@ export default function EmployeesPage() {
   const [editing, setEditing] = useState<Employee | null>(null);
   const [tab, setTab] = useState<'details' | 'assets' | 'consumables' | 'comments'>('details');
   const [form, setForm] = useState({
-    employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true, needs_review: false,
+    employee_code: '', full_name: '', email: '', department_id: '', location_id: '', secondary_location_id: '', is_active: true, needs_review: false,
   });
   const [departments, setDepartments] = useState<Department[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -108,7 +108,13 @@ export default function EmployeesPage() {
     },
     {
       key: 'location_id',
-      label: 'Location',
+      label: 'Primary Location',
+      type: 'select',
+      options: locations.map((l) => ({ value: String(l.id), label: l.name })),
+    },
+    {
+      key: 'secondary_location_id',
+      label: 'Secondary Location',
       type: 'select',
       options: locations.map((l) => ({ value: String(l.id), label: l.name })),
     },
@@ -138,7 +144,8 @@ export default function EmployeesPage() {
     },
     { accessorKey: 'email', header: 'Email', size: 240, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
     { accessorKey: 'department_id', header: 'Department', size: 180, cell: (i) => deptName(i.getValue() as number | null) },
-    { accessorKey: 'location_id', header: 'Location', size: 200, cell: (i) => locName(i.getValue() as number | null) },
+    { accessorKey: 'location_id', header: 'Primary Location', size: 180, cell: (i) => locName(i.getValue() as number | null) },
+    { accessorKey: 'secondary_location_id', header: 'Secondary Location', size: 180, cell: (i) => locName(i.getValue() as number | null) || <span className="text-slate-300">—</span> },
     {
       accessorKey: 'is_active', header: 'Active', size: 90,
       cell: (i) => i.getValue() ? (
@@ -156,7 +163,7 @@ export default function EmployeesPage() {
     setConsumables(null);
     setComments([]);
     setNewComment('');
-    setForm({ employee_code: '', full_name: '', email: '', department_id: '', location_id: '', is_active: true, needs_review: false });
+    setForm({ employee_code: '', full_name: '', email: '', department_id: '', location_id: '', secondary_location_id: '', is_active: true, needs_review: false });
     setOpen(true);
   };
 
@@ -173,6 +180,7 @@ export default function EmployeesPage() {
       email: row.email || '',
       department_id: row.department_id ? String(row.department_id) : '',
       location_id: row.location_id ? String(row.location_id) : '',
+      secondary_location_id: (row as any).secondary_location_id ? String((row as any).secondary_location_id) : '',
       is_active: row.is_active,
       needs_review: row.needs_review,
     });
@@ -309,6 +317,7 @@ export default function EmployeesPage() {
         email: form.email || null,
         department_id: form.department_id ? Number(form.department_id) : null,
         location_id: form.location_id ? Number(form.location_id) : null,
+        secondary_location_id: form.secondary_location_id ? Number(form.secondary_location_id) : null,
         is_active: form.is_active,
         needs_review: form.needs_review,
       };
@@ -529,7 +538,7 @@ export default function EmployeesPage() {
               />
             </div>
             <div className="col-span-1">
-              <label className="label flex items-center">Location <CopyButton value={locName(form.location_id ? Number(form.location_id) : null)} />
+              <label className="label flex items-center">Primary Location <CopyButton value={locName(form.location_id ? Number(form.location_id) : null)} />
                 {form.location_id && (
                   <button type="button" onClick={() => navigate(`/locations?openId=${form.location_id}`)} className="ml-1 text-slate-400 hover:text-brand-600 transition-colors" title="Go to location"><ExternalLink className="w-3 h-3" /></button>
                 )}
@@ -538,6 +547,20 @@ export default function EmployeesPage() {
                 value={form.location_id}
                 onChange={(v) => setForm({ ...form, location_id: v })}
                 options={locations.map((l) => ({ value: String(l.id), label: l.name }))}
+              />
+            </div>
+            <div className="col-span-1">
+              <label className="label flex items-center">Secondary Location <CopyButton value={locName(form.secondary_location_id ? Number(form.secondary_location_id) : null)} />
+                {form.secondary_location_id && (
+                  <button type="button" onClick={() => navigate(`/locations?openId=${form.secondary_location_id}`)} className="ml-1 text-slate-400 hover:text-brand-600 transition-colors" title="Go to location"><ExternalLink className="w-3 h-3" /></button>
+                )}
+              </label>
+              <SearchableSelect
+                value={form.secondary_location_id}
+                onChange={(v) => setForm({ ...form, secondary_location_id: v })}
+                options={locations.map((l) => ({ value: String(l.id), label: l.name }))}
+                emptyOption="— None —"
+                placeholder="— None —"
               />
             </div>
             <div className="col-span-1">

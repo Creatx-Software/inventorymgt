@@ -319,7 +319,7 @@ employeeAssetsRouter.post('/bulk-review', async (req, res) => {
 employeeAssetsRouter.post('/bulk-edit', async (req, res) => {
   const { ids, patch } = req.body as { ids: number[]; patch: Record<string, any> };
   if (!ids?.length || !patch) return res.status(400).json({ error: 'ids and patch required' });
-  const allowed = ['department_id', 'location_id', 'is_active', 'needs_review'];
+  const allowed = ['department_id', 'location_id', 'secondary_location_id', 'is_active', 'needs_review'];
   const safe: Record<string, any> = {};
   for (const key of allowed) {
     if (key in patch) safe[key] = patch[key];

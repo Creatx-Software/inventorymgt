@@ -4,8 +4,9 @@ import { auditLogsApi, type AuditLog, type AuditEntityType } from '../api/operat
 import {
   Loader2, ChevronLeft, ChevronRight, Search, RefreshCw, Filter, X,
   Plus, Pencil, Trash2, RotateCcw, LogIn, Upload, Download, ExternalLink,
-  ArrowRight,
+  ArrowRight, FileSpreadsheet,
 } from 'lucide-react';
+import { api } from '../api/client';
 import clsx from 'clsx';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 
@@ -58,6 +59,31 @@ export default function AuditLogsPage() {
   const [to, setTo] = useState('');
   const [selected, setSelected] = useState<AuditLog | null>(null);
   const [entityTypes, setEntityTypes] = useState<AuditEntityType[]>([]);
+  const [showReport, setShowReport] = useState(false);
+  const [reportFrom, setReportFrom] = useState('');
+  const [reportTo, setReportTo] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+
+  const downloadChangesReport = async () => {
+    setReportLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (reportFrom) params.set('from', reportFrom);
+      if (reportTo)   params.set('to', reportTo);
+      const r = await api.get(`/audit-logs/changes-report?${params.toString()}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement('a');
+      const disposition = r.headers['content-disposition'] ?? '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      a.href = url;
+      a.download = match?.[1] ?? 'changes_report.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+      setShowReport(false);
+    } catch {
+      alert('Failed to generate report');
+    } finally { setReportLoading(false); }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -99,9 +125,14 @@ export default function AuditLogsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Audit Log</h1>
           <p className="text-sm text-slate-500 mt-1">Every change recorded in the system</p>
         </div>
-        <button onClick={load} className="btn-secondary">
-          <RefreshCw className={clsx('w-4 h-4', loading && 'animate-spin')} /> Refresh
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowReport(true)} className="btn-secondary">
+            <FileSpreadsheet className="w-4 h-4" /> Changes Report
+          </button>
+          <button onClick={load} className="btn-secondary">
+            <RefreshCw className={clsx('w-4 h-4', loading && 'animate-spin')} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -238,6 +269,40 @@ export default function AuditLogsPage() {
 
       {/* Detail modal */}
       {selected && <AuditDetailModal log={selected} onClose={() => setSelected(null)} onGotoEntity={() => { goToEntity(selected); setSelected(null); }} />}
+
+      {/* Changes Report modal */}
+      {showReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="card w-full max-w-md p-6 shadow-xl">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md">
+                <FileSpreadsheet className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="font-semibold text-slate-900">Changes Report</div>
+                <div className="text-xs text-slate-500">Download all asset changes as an Excel file — one sheet per asset type</div>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="label">From Date</label>
+                <input type="date" className="input" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">To Date</label>
+                <input type="date" className="input" value={reportTo} onChange={(e) => setReportTo(e.target.value)} />
+              </div>
+              <p className="text-xs text-slate-400">Leave both blank to download all changes ever recorded.</p>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setShowReport(false)} className="btn-secondary">Cancel</button>
+              <button onClick={downloadChangesReport} disabled={reportLoading} className="btn-primary">
+                {reportLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Download className="w-4 h-4" /> Download Excel</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

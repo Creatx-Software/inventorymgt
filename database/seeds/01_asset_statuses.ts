@@ -8,6 +8,7 @@ const statuses = [
   { id: 6, name: 'Returned',     color: '#8b5cf6' },
   { id: 7, name: 'Transfer',              color: '#06b6d4' },
   { id: 8, name: 'Under Investigation',  color: '#f97316' },
+  { id: 9, name: 'With User',            color: '#0ea5e9' },
 ];
 
 export async function seed(knex) {

@@ -199,17 +199,6 @@ export default function Settings() {
                 emptyOption="— All departments (no filter) —"
               />
             </div>
-            <div>
-              <label className="label">Default Return Location</label>
-              <p className="text-xs text-slate-500 mb-2">When an asset is returned from an employee, it will be moved to this location automatically.</p>
-              <SearchableSelect
-                value={returnLocationId}
-                onChange={(v) => setReturnLocationId(v)}
-                options={locations.map((l) => ({ value: String(l.id), label: l.name }))}
-                placeholder="— No default (location unchanged) —"
-                emptyOption="— No default (location unchanged) —"
-              />
-            </div>
             {settingsMsg && (
               <div className={`rounded-lg px-3 py-2 text-sm flex items-center gap-2 ${
                 settingsMsg.type === 'success'
