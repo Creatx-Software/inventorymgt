@@ -11,7 +11,7 @@ interface Extra {
   application_tier: '' | '0' | '1' | '2' | '3' | '4';
   server_class: '' | 'Physical' | 'Virtual';
   server_type: '' | 'Web' | 'App' | 'DB' | 'Other';
-  environment: '' | 'Prod' | 'FB' | 'DR';
+  environment: '' | 'Prod' | 'FB' | 'DR' | 'UAT';
   os_name_version: string; server_software: string; managed_by: string;
   ip_address: string; host_name: string; asset_code: string; dc_location: string;
   is_under_warranty: boolean; warranty_expiry_date: string; eol_date: string;
@@ -34,6 +34,7 @@ const envBadge = (v: string | null) => {
     Prod: 'bg-red-50 text-red-700 border-red-200',
     FB: 'bg-amber-50 text-amber-700 border-amber-200',
     DR: 'bg-blue-50 text-blue-700 border-blue-200',
+    UAT: 'bg-purple-50 text-purple-700 border-purple-200',
   };
   return <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full border ${colors[v]}`}>{v}</span>;
 };
@@ -146,7 +147,7 @@ export default function ServersPage() {
             <SearchableSelect
               value={extra.environment}
               onChange={(v) => set({ ...extra, environment: v as any })}
-              options={['Prod','FB','DR'].map((x) => ({ value: x, label: x }))}
+              options={['Prod','FB','DR','UAT'].map((x) => ({ value: x, label: x }))}
             />
           </div>
           <div><label className="label">Managed By</label><input className="input" value={extra.managed_by} onChange={(e) => set({ ...extra, managed_by: e.target.value })} /></div>
