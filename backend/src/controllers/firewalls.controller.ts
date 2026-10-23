@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import db from '../config/db';
 import { authMiddleware, requirePermission, AuthRequest } from '../middleware/auth';
 import { audit } from '../services/audit.service';

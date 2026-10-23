@@ -36,7 +36,7 @@ export async function up(knex: Knex): Promise<void> {
     t.string('reference_number', 100).nullable();
     t.text('notes').nullable();
     t.timestamp('created_at').defaultTo(knex.fn.now());
-    t.index(['consumable_item_id', 'transaction_type']);
+    t.index(['consumable_item_id', 'transaction_type'], 'ct_item_type_idx');
     t.index(['employee_id']);
   });
 }

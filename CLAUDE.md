@@ -723,6 +723,7 @@ npm run sync-employee-location    # bulk-sync dept/location on all assigned asse
 npm run sync-employee-location -- --dry-run           # preview only — nothing written
 npm run sync-employee-location -- --table=endpoints   # single table only
 
+
 # Frontend
 cd frontend
 npm install
