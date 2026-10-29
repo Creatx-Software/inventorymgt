@@ -84,9 +84,14 @@ export class AssetService {
       if (params.filters) {
         for (const [k, v] of Object.entries(params.filters)) {
           if (!v || !this.opts.allowedFilterColumns.includes(k)) continue;
-          // FK columns: exact match; text columns: substring match
-          if (k.endsWith('_id') || k.startsWith('is_')) q.where(`${T}.${k}`, v);
-          else q.where(`${T}.${k}`, 'like', `%${v}%`);
+          // FK and boolean columns: exact match (supports comma-separated multi-values)
+          if (k.endsWith('_id') || k.startsWith('is_')) {
+            const vals = v.split(',').map((s: string) => s.trim()).filter(Boolean);
+            if (vals.length > 1) q.whereIn(`${T}.${k}`, vals);
+            else q.where(`${T}.${k}`, vals[0]);
+          } else {
+            q.where(`${T}.${k}`, 'like', `%${v}%`);
+          }
         }
       }
       return q;
