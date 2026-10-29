@@ -339,6 +339,20 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
 
     const BOOL_COLS = new Set(['is_under_warranty', 'data_wiped', 'hardening_status', 'patching_status', 'is_recording_enabled']);
 
+    const fmtDate = (v: any): string => {
+      if (!v) return '';
+      const s = String(v);
+      // ISO datetime: 2026-04-27T12:15:51.000Z  or  date-only: 2026-04-27
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+      return s;
+    };
+    const DATE_COLS = new Set([
+      'warranty_expiry_date', 'eol_date', 'assigned_date', 'returned_date',
+      'created_at', 'updated_at', 'deleted_at', 'last_login_at', 'transaction_date',
+      'date', 'start_datetime', 'end_datetime',
+    ]);
+
     const styledRows = data.map((row, ri) => {
       const s = ri % 2 === 0 ? ROW_EVEN : ROW_ODD;
       return sheetCols.map((col) => {
@@ -352,6 +366,9 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
         } else {
           val = (row as any)[col.key] ?? '';
           if (BOOL_COLS.has(col.key)) val = val ? 'Yes' : 'No';
+          else if (DATE_COLS.has(col.key)) val = fmtDate(val);
+          // Auto-detect any remaining ISO date/datetime strings
+          else if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}(T|\s|$)/.test(val)) val = fmtDate(val);
         }
         return { v: val === '' || val == null ? '' : val, t: typeof val === 'number' ? 'n' : 's', s };
       });
@@ -368,6 +385,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
         else if (col.key === '__data_wiped_by__') val = String((row as any).data_wiped_by ?? '');
         else if (col.key === '__data_checked_by__') val = String((row as any).data_checked_by ?? '');
         else if (BOOL_COLS.has(col.key)) val = (row as any)[col.key] ? 'Yes' : 'No';
+        else if (DATE_COLS.has(col.key)) val = fmtDate((row as any)[col.key]);
         else val = String((row as any)[col.key] ?? '');
         if (val.length > max) max = val.length;
       });
