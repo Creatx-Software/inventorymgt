@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-table';
 import {
   Search, Plus, Trash2, Download, RefreshCw, Settings2, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, Loader2, X, Trash, RotateCcw, SlidersHorizontal,
+  ArrowUp, ArrowDown, Loader2, X, Trash, RotateCcw, SlidersHorizontal, ChevronDown,
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { ListParams, PaginatedResponse } from '../../types/api';
@@ -22,6 +22,84 @@ export interface FilterFieldDef {
   type: 'text' | 'select';
   options?: { value: string; label: string }[];
   placeholder?: string;
+}
+
+// Multi-select dropdown component used in the filter panel
+function MultiSelectDropdown({
+  options,
+  selected,
+  onChange,
+  placeholder = 'All',
+}: {
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (vals: string[]) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggle = (val: string) => {
+    if (selected.includes(val)) onChange(selected.filter((v) => v !== val));
+    else onChange([...selected, val]);
+  };
+
+  const displayLabel = selected.length === 0
+    ? placeholder
+    : selected.length === 1
+      ? (options.find((o) => o.value === selected[0])?.label ?? selected[0])
+      : `${selected.length} selected`;
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={clsx(
+          'input py-1.5 text-sm w-full flex items-center justify-between gap-1 text-left',
+          selected.length > 0 ? 'text-slate-900' : 'text-slate-400',
+        )}
+      >
+        <span className="truncate">{displayLabel}</span>
+        <ChevronDown className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 w-48 min-w-full bg-white border border-slate-200 rounded-lg shadow-lg py-1 max-h-56 overflow-y-auto">
+          {selected.length > 0 && (
+            <button
+              type="button"
+              onClick={() => { onChange([]); setOpen(false); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-brand-600 hover:bg-brand-50 font-medium"
+            >
+              Clear selection
+            </button>
+          )}
+          {options.map((o) => (
+            <label
+              key={o.value}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(o.value)}
+                onChange={() => toggle(o.value)}
+                className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600"
+              />
+              <span className="truncate">{o.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export interface DataTableProps<T extends { id: number }> {
@@ -84,12 +162,16 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
   const [showColMenu, setShowColMenu] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [columnFilters, setColumnFilters] = useState<Record<string, string | string[]>>({});
   const [showFilters, setShowFilters] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const activeColumnFilters = useMemo(
-    () => Object.fromEntries(Object.entries(columnFilters).filter(([, v]) => v !== '')),
+    () => Object.fromEntries(
+      Object.entries(columnFilters).filter(([, v]) =>
+        Array.isArray(v) ? v.length > 0 : v !== '',
+      ),
+    ),
     [columnFilters],
   );
   const activeFilterCount = Object.keys(activeColumnFilters).length;
@@ -156,6 +238,11 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
     setLoading(true);
     try {
       const sort = sorting[0];
+      // Serialize array filters to comma-separated strings for the API
+      const serializedFilters: Record<string, string> = {};
+      for (const [k, v] of Object.entries(activeColumnFilters)) {
+        serializedFilters[k] = Array.isArray(v) ? v.join(',') : v;
+      }
       const r = await fetcher({
         page,
         pageSize: pageSize === 0 ? 99999 : pageSize,
@@ -163,7 +250,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
         sortBy: sort?.id,
         sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
         includeDeleted: showDeleted,
-        filters: activeFilterCount > 0 ? activeColumnFilters : undefined,
+        filters: activeFilterCount > 0 ? serializedFilters : undefined,
       });
       setData(r.data);
       setTotal(r.pagination.total);
@@ -183,7 +270,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
   const selectedIds = Object.keys(rowSelection).map(Number);
   const hasSelection = selectedIds.length > 0;
 
-  const setFilter = (key: string, value: string) => {
+  const setFilter = (key: string, value: string | string[]) => {
     setColumnFilters((prev) => ({ ...prev, [key]: value }));
     setPage(1);
   };
@@ -252,6 +339,20 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
 
     const BOOL_COLS = new Set(['is_under_warranty', 'data_wiped', 'hardening_status', 'patching_status', 'is_recording_enabled']);
 
+    const fmtDate = (v: any): string => {
+      if (!v) return '';
+      const s = String(v);
+      // ISO datetime: 2026-04-27T12:15:51.000Z  or  date-only: 2026-04-27
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+      return s;
+    };
+    const DATE_COLS = new Set([
+      'warranty_expiry_date', 'eol_date', 'assigned_date', 'returned_date',
+      'created_at', 'updated_at', 'deleted_at', 'last_login_at', 'transaction_date',
+      'date', 'start_datetime', 'end_datetime',
+    ]);
+
     const styledRows = data.map((row, ri) => {
       const s = ri % 2 === 0 ? ROW_EVEN : ROW_ODD;
       return sheetCols.map((col) => {
@@ -265,6 +366,9 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
         } else {
           val = (row as any)[col.key] ?? '';
           if (BOOL_COLS.has(col.key)) val = val ? 'Yes' : 'No';
+          else if (DATE_COLS.has(col.key)) val = fmtDate(val);
+          // Auto-detect any remaining ISO date/datetime strings
+          else if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}(T|\s|$)/.test(val)) val = fmtDate(val);
         }
         return { v: val === '' || val == null ? '' : val, t: typeof val === 'number' ? 'n' : 's', s };
       });
@@ -281,6 +385,7 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
         else if (col.key === '__data_wiped_by__') val = String((row as any).data_wiped_by ?? '');
         else if (col.key === '__data_checked_by__') val = String((row as any).data_checked_by ?? '');
         else if (BOOL_COLS.has(col.key)) val = (row as any)[col.key] ? 'Yes' : 'No';
+        else if (DATE_COLS.has(col.key)) val = fmtDate((row as any)[col.key]);
         else val = String((row as any)[col.key] ?? '');
         if (val.length > max) max = val.length;
       });
@@ -413,16 +518,17 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
                     {field.label}
                   </label>
                   {field.type === 'select' ? (
-                    <select
-                      value={columnFilters[field.key] || ''}
-                      onChange={(e) => setFilter(field.key, e.target.value)}
-                      className="input py-1.5 text-sm w-full"
-                    >
-                      <option value="">All</option>
-                      {field.options?.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                    <MultiSelectDropdown
+                      options={field.options ?? []}
+                      selected={
+                        Array.isArray(columnFilters[field.key])
+                          ? (columnFilters[field.key] as string[])
+                          : columnFilters[field.key]
+                            ? [(columnFilters[field.key] as string)]
+                            : []
+                      }
+                      onChange={(vals) => setFilter(field.key, vals)}
+                    />
                   ) : (
                     <input
                       type="text"
@@ -453,13 +559,14 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
           <span className="text-xs text-slate-500 font-medium">Filters:</span>
           {Object.entries(activeColumnFilters).map(([key, value]) => {
             const field = filterFields?.find((f) => f.key === key);
+            const values = Array.isArray(value) ? value : [value];
             const displayValue = field?.type === 'select'
-              ? (field.options?.find((o) => o.value === value)?.label ?? value)
-              : value;
+              ? values.map((v) => field.options?.find((o) => o.value === v)?.label ?? v).join(', ')
+              : String(value);
             return (
               <span key={key} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 border border-brand-200 text-xs text-brand-700">
                 <span className="font-medium">{field?.label ?? key}:</span> {displayValue}
-                <button onClick={() => setFilter(key, '')} className="ml-0.5 text-brand-400 hover:text-brand-600">
+                <button onClick={() => setFilter(key, field?.type === 'select' ? [] : '')} className="ml-0.5 text-brand-400 hover:text-brand-600">
                   <X className="w-3 h-3" />
                 </button>
               </span>
