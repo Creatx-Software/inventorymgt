@@ -19,6 +19,9 @@ auditRouter.get('/entity-types', (_req, res) => {
 // Asset entity types only (not employees, vendors, etc.)
 const ASSET_ENTITY_TYPES = ['endpoint', 'monitor', 'mobile_device', 'ip_phone', 'server', 'printer', 'network_device', 'other_asset'];
 
+// Asset types for the weekly report (consumables handled separately via transactions)
+const WEEKLY_ENTITY_TYPES = ASSET_ENTITY_TYPES;
+
 const ASSET_TABLE_MAP: Record<string, string> = {
   endpoint: 'endpoints', monitor: 'monitors', mobile_device: 'mobile_devices',
   ip_phone: 'ip_phones', server: 'servers', printer: 'printers',
@@ -376,7 +379,7 @@ auditRouter.get('/weekly-report', async (req, res) => {
   // 1. Audit rows in range
   const q = db('audit_logs')
     .leftJoin('users', 'audit_logs.user_id', 'users.id')
-    .whereIn('audit_logs.entity_type', ASSET_ENTITY_TYPES)
+    .whereIn('audit_logs.entity_type', WEEKLY_ENTITY_TYPES)
     .whereIn('audit_logs.action', ['CREATE', 'UPDATE', 'DELETE', 'RESTORE'])
     .select('audit_logs.entity_type', 'audit_logs.entity_id', 'audit_logs.action',
             'audit_logs.created_at', 'users.full_name as user_full_name', 'users.username');
@@ -471,6 +474,23 @@ auditRouter.get('/weekly-report', async (req, res) => {
 
   const wb = XLSX.utils.book_new();
 
+  // ── Fetch consumable transactions (assigned / returned) in the date range ──
+  const consumableTxQ = db('consumable_transactions as ct')
+    .join('consumable_items as ci', 'ct.consumable_item_id', 'ci.id')
+    .leftJoin('employees as e', 'ct.employee_id', 'e.id')
+    .leftJoin('users as u', 'ct.performed_by_user_id', 'u.id')
+    .whereIn('ct.transaction_type', ['assigned', 'returned'])
+    .select(
+      'ci.name as item_name', 'ci.category', 'ci.unit',
+      'ct.transaction_type', 'ct.quantity', 'ct.transaction_date', 'ct.notes',
+      'e.full_name as employee_name', 'e.employee_code',
+      'u.full_name as performed_by',
+    )
+    .orderBy('ct.transaction_date', 'asc');
+  if (from) consumableTxQ.where('ct.transaction_date', '>=', from);
+  if (to)   consumableTxQ.where('ct.transaction_date', '<=', to);
+  const consumableTxRows = await consumableTxQ as any[];
+
   // ── Summary sheet ─────────────────────────────────────────────────────────
   const summaryRows: any[][] = [
     [{ v: 'Weekly Asset Status Report', t: 's', s: { ...S_TITLE, font: { ...S_TITLE.font, sz: 16 } } }],
@@ -482,7 +502,7 @@ auditRouter.get('/weekly-report', async (req, res) => {
       { v: 'Assets Changed', t: 's', s: S_HDR_ASSET },
     ],
   ];
-  for (const type of ASSET_ENTITY_TYPES) {
+  for (const type of WEEKLY_ENTITY_TYPES) {
     const idSet = idsByType.get(type);
     if (!idSet || idSet.size === 0) continue;
     const cfg = ENTITY_TYPES[type];
@@ -491,13 +511,16 @@ auditRouter.get('/weekly-report', async (req, res) => {
       cell(idSet.size, S_ROW_EVEN),
     ]);
   }
+  if (consumableTxRows.length > 0) {
+    summaryRows.push([cell('Consumable Assignments', S_ROW_EVEN), cell(consumableTxRows.length, S_ROW_EVEN)]);
+  }
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
-  wsSummary['!cols'] = [{ wch: 22 }, { wch: 16 }];
+  wsSummary['!cols'] = [{ wch: 26 }, { wch: 18 }];
   wsSummary['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
   XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-  // ── Per-type sheets ────────────────────────────────────────────────────────
-  for (const type of ASSET_ENTITY_TYPES) {
+  // ── Per-type asset sheets ──────────────────────────────────────────────────
+  for (const type of WEEKLY_ENTITY_TYPES) {
     const idSet = idsByType.get(type);
     if (!idSet || idSet.size === 0) continue;
     const assetMap = assetsByType.get(type) || new Map();
@@ -538,7 +561,6 @@ auditRouter.get('/weekly-report', async (req, res) => {
         if (raw == null) return '';
         if (BOOL_KEYS.has(key)) return raw ? 'Yes' : 'No';
         if (DATE_KEYS.has(key)) return fmtDate(raw);
-        // Auto-detect ISO dates
         if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}(T|\s|$)/.test(raw)) return fmtDate(raw);
         return String(raw);
       };
@@ -570,6 +592,57 @@ auditRouter.get('/weekly-report', async (req, res) => {
       { s: { r: 1, c: 0 }, e: { r: 1, c: allCols.length - 1 } },
     ];
     XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+  }
+
+  // ── Consumable Assignments sheet ──────────────────────────────────────────
+  if (consumableTxRows.length > 0) {
+    const TX_TYPE_COLOR: Record<string, string> = { assigned: '1D4ED8', returned: '065F46' };
+    const cCols = [
+      { key: 'item_name',       label: 'Item Name' },
+      { key: 'category',        label: 'Category' },
+      { key: 'employee_name',   label: 'Employee' },
+      { key: 'employee_code',   label: 'Employee ID' },
+      { key: 'transaction_type',label: 'Type' },
+      { key: 'quantity',        label: 'Qty' },
+      { key: 'unit',            label: 'Unit' },
+      { key: 'transaction_date',label: 'Date' },
+      { key: 'notes',           label: 'Notes' },
+      { key: 'performed_by',    label: 'Performed By' },
+    ];
+    const cTitleAoa: any[][] = [
+      [{ v: 'Consumable Assignments', t: 's', s: { ...S_TITLE, font: { ...S_TITLE.font, sz: 13 } } }],
+      [{ v: `Period: ${reportPeriod}   |   ${consumableTxRows.length} transaction(s)`, t: 's', s: S_META }],
+      [],
+      cCols.map((c) => ({ v: c.label, t: 's', s: S_HDR_ASSET })),
+    ];
+    const cDataRows = consumableTxRows.map((tx: any, ri: number) => {
+      const s = ri % 2 === 0 ? S_ROW_EVEN : S_ROW_ODD;
+      return cCols.map((c) => {
+        const raw = tx[c.key];
+        const v = raw == null ? '' : c.key === 'transaction_date' ? fmtDate(raw) : String(raw);
+        if (c.key === 'transaction_type') {
+          const color = TX_TYPE_COLOR[String(raw)] || '374151';
+          const label = raw === 'assigned' ? 'Assigned' : raw === 'returned' ? 'Returned' : String(raw);
+          return cell(label, s, { bold: true, color: { rgb: color } });
+        }
+        if (c.key === 'employee_name') return cell(v, s, { bold: !!v });
+        return cell(v, s);
+      });
+    });
+    const cWidths = cCols.map((c, ci) => {
+      let max = c.label.length;
+      for (const dr of cDataRows) { const len = String((dr[ci] as any).v ?? '').length; if (len > max) max = len; }
+      return { wch: Math.min(Math.max(max + 2, 10), 45) };
+    });
+    const wsC = XLSX.utils.aoa_to_sheet([...cTitleAoa, ...cDataRows]);
+    wsC['!cols'] = cWidths;
+    wsC['!rows'] = [{ hpt: 24 }, { hpt: 14 }, { hpt: 6 }, { hpt: 20 }];
+    wsC['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: 4, topLeftCell: 'A5' }];
+    wsC['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: cCols.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: cCols.length - 1 } },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsC, 'Consumable Assignments');
   }
 
   const stamp = `${now2.getFullYear()}${String(now2.getMonth()+1).padStart(2,'0')}${String(now2.getDate()).padStart(2,'0')}`;
