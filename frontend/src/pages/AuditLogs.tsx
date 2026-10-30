@@ -63,6 +63,13 @@ export default function AuditLogsPage() {
   const [reportFrom, setReportFrom] = useState('');
   const [reportTo, setReportTo] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
+  const [showWeekly, setShowWeekly] = useState(false);
+  const [weeklyFrom, setWeeklyFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const [weeklyTo, setWeeklyTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
 
   const downloadChangesReport = async () => {
     setReportLoading(true);
@@ -83,6 +90,27 @@ export default function AuditLogsPage() {
     } catch {
       alert('Failed to generate report');
     } finally { setReportLoading(false); }
+  };
+
+  const downloadWeeklyReport = async () => {
+    setWeeklyLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (weeklyFrom) params.set('from', weeklyFrom);
+      if (weeklyTo)   params.set('to', weeklyTo);
+      const r = await api.get(`/audit-logs/weekly-report?${params.toString()}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement('a');
+      const disposition = r.headers['content-disposition'] ?? '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      a.href = url;
+      a.download = match?.[1] ?? 'weekly_report.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+      setShowWeekly(false);
+    } catch {
+      alert('No changes found in the selected date range, or failed to generate report.');
+    } finally { setWeeklyLoading(false); }
   };
 
   const load = async () => {
@@ -126,6 +154,9 @@ export default function AuditLogsPage() {
           <p className="text-sm text-slate-500 mt-1">Every change recorded in the system</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setShowWeekly(true)} className="btn-secondary">
+            <FileSpreadsheet className="w-4 h-4" /> Weekly Report
+          </button>
           <button onClick={() => setShowReport(true)} className="btn-secondary">
             <FileSpreadsheet className="w-4 h-4" /> Changes Report
           </button>
@@ -269,6 +300,40 @@ export default function AuditLogsPage() {
 
       {/* Detail modal */}
       {selected && <AuditDetailModal log={selected} onClose={() => setSelected(null)} onGotoEntity={() => { goToEntity(selected); setSelected(null); }} />}
+
+      {/* Weekly Report modal */}
+      {showWeekly && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="card w-full max-w-md p-6 shadow-xl">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md">
+                <FileSpreadsheet className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="font-semibold text-slate-900">Weekly Asset Report</div>
+                <div className="text-xs text-slate-500">Current state of every asset changed in the selected period — one sheet per asset type</div>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="label">From Date</label>
+                <input type="date" className="input" value={weeklyFrom} onChange={(e) => setWeeklyFrom(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">To Date</label>
+                <input type="date" className="input" value={weeklyTo} onChange={(e) => setWeeklyTo(e.target.value)} />
+              </div>
+              <p className="text-xs text-slate-400">Defaults to the last 7 days. Each row shows the asset's current details plus who last changed it.</p>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setShowWeekly(false)} className="btn-secondary">Cancel</button>
+              <button onClick={downloadWeeklyReport} disabled={weeklyLoading} className="btn-primary">
+                {weeklyLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Download className="w-4 h-4" /> Download Excel</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Changes Report modal */}
       {showReport && (

@@ -367,6 +367,219 @@ auditRouter.get('/changes-report', async (req, res) => {
   res.send(buf);
 });
 
+// ── Weekly / Current-State Report ─────────────────────────────────────────────
+// Returns one sheet per asset type showing the CURRENT full row for every
+// asset that was touched (CREATE / UPDATE / DELETE / RESTORE) in the period.
+auditRouter.get('/weekly-report', async (req, res) => {
+  const { from, to } = req.query as Record<string, string>;
+
+  // 1. Audit rows in range
+  const q = db('audit_logs')
+    .leftJoin('users', 'audit_logs.user_id', 'users.id')
+    .whereIn('audit_logs.entity_type', ASSET_ENTITY_TYPES)
+    .whereIn('audit_logs.action', ['CREATE', 'UPDATE', 'DELETE', 'RESTORE'])
+    .select('audit_logs.entity_type', 'audit_logs.entity_id', 'audit_logs.action',
+            'audit_logs.created_at', 'users.full_name as user_full_name', 'users.username');
+  if (from) q.where('audit_logs.created_at', '>=', from);
+  if (to)   q.where('audit_logs.created_at', '<=', `${to} 23:59:59`);
+  const auditRows = await q as any[];
+
+  // 2. Collect unique asset ids per type + last-change info per asset
+  const idsByType = new Map<string, Set<number>>();
+  const lastChangeByAsset = new Map<string, { date: string; user: string; action: string }>();
+  for (const row of auditRows) {
+    if (!row.entity_id) continue;
+    const key = `${row.entity_type}:${row.entity_id}`;
+    if (!idsByType.has(row.entity_type)) idsByType.set(row.entity_type, new Set());
+    idsByType.get(row.entity_type)!.add(Number(row.entity_id));
+    // Keep the most-recent change record per asset
+    const existing = lastChangeByAsset.get(key);
+    if (!existing || new Date(row.created_at) > new Date(existing.date)) {
+      lastChangeByAsset.set(key, {
+        date: row.created_at,
+        user: row.user_full_name || row.username || '',
+        action: row.action,
+      });
+    }
+  }
+
+  if (idsByType.size === 0) {
+    res.status(404).json({ error: 'No changes found in the selected date range.' });
+    return;
+  }
+
+  // 3. Lookup maps
+  const [vendors, locations, departments, employees, statuses] = await Promise.all([
+    db('vendors').select('id', 'name'),
+    db('locations').select('id', 'name'),
+    db('departments').select('id', 'name'),
+    db('employees').select('id', 'full_name', 'employee_code'),
+    db('asset_statuses').select('id', 'name'),
+  ]);
+  const vendorMap   = new Map((vendors   as any[]).map((r: any) => [r.id, r.name]));
+  const locationMap = new Map((locations as any[]).map((r: any) => [r.id, r.name]));
+  const deptMap     = new Map((departments as any[]).map((r: any) => [r.id, r.name]));
+  const empMap      = new Map((employees  as any[]).map((r: any) => [r.id, { name: r.full_name, code: r.employee_code }]));
+  const statusMap   = new Map((statuses   as any[]).map((r: any) => [r.id, r.name]));
+
+  // 4. Fetch current asset rows per type
+  const assetsByType = new Map<string, Map<number, any>>();
+  for (const [type, idSet] of idsByType.entries()) {
+    const table = ASSET_TABLE_MAP[type];
+    if (!table) continue;
+    const rows = await db(table).whereIn('id', Array.from(idSet)) as any[];
+    const map = new Map<number, any>();
+    for (const r of rows) map.set(r.id, r);
+    assetsByType.set(type, map);
+  }
+
+  // 5. Styles (reuse same scheme as changes-report)
+  const BORDER_THIN = { style: 'thin', color: { rgb: 'D1D5DB' } };
+  const CELL_BORDER = { top: BORDER_THIN, bottom: BORDER_THIN, left: BORDER_THIN, right: BORDER_THIN };
+  const S_TITLE = { font: { bold: true, sz: 14, color: { rgb: '1E3A8A' }, name: 'Calibri' }, fill: { patternType: 'solid', fgColor: { rgb: 'EFF6FF' } }, alignment: { horizontal: 'left', vertical: 'center' } };
+  const S_META  = { font: { sz: 10, color: { rgb: '6B7280' }, name: 'Calibri' }, fill: { patternType: 'solid', fgColor: { rgb: 'F9FAFB' } }, alignment: { horizontal: 'left', vertical: 'center' } };
+  const S_HDR_ASSET  = { fill: { patternType: 'solid', fgColor: { rgb: '1E3A8A' } }, font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10, name: 'Calibri' }, alignment: { horizontal: 'center', vertical: 'center' }, border: CELL_BORDER };
+  const S_HDR_CHANGE = { fill: { patternType: 'solid', fgColor: { rgb: '065F46' } }, font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10, name: 'Calibri' }, alignment: { horizontal: 'center', vertical: 'center' }, border: CELL_BORDER };
+  const S_ROW_EVEN = { fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } }, font: { sz: 10, name: 'Calibri', color: { rgb: '111827' } }, alignment: { vertical: 'center' }, border: CELL_BORDER };
+  const S_ROW_ODD  = { fill: { patternType: 'solid', fgColor: { rgb: 'F0F9FF' } }, font: { sz: 10, name: 'Calibri', color: { rgb: '111827' } }, alignment: { vertical: 'center' }, border: CELL_BORDER };
+  const ACTION_FONT: Record<string, string> = { CREATE: '065F46', UPDATE: '1D4ED8', DELETE: '991B1B', RESTORE: '6B21A8' };
+
+  const fmtDate = (v: any) => {
+    if (!v) return '';
+    const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : String(v);
+  };
+  const BOOL_KEYS = new Set(['is_under_warranty', 'hardening_status', 'patching_status', 'data_wiped', 'is_recording_enabled']);
+  const DATE_KEYS = new Set(['warranty_expiry_date', 'eol_date', 'created_at', 'updated_at']);
+
+  const cell = (v: any, s: any, overrideFont?: any) => ({
+    v: v == null ? '' : String(v),
+    t: 's',
+    s: overrideFont ? { ...s, font: { ...s.font, ...overrideFont } } : s,
+  });
+
+  const now2 = new Date();
+  const reportPeriod = (from && to) ? `${from} to ${to}` : from ? `from ${from}` : to ? `up to ${to}` : 'All time';
+  const generatedAt = now2.toLocaleString('en-GB');
+
+  // Change-info columns appended at the end
+  const LAST_CHANGE_COLS = [
+    { key: '__last_change_date__', label: 'Last Changed' },
+    { key: '__last_changed_by__', label: 'Changed By' },
+    { key: '__last_action__',     label: 'Action' },
+  ];
+
+  const wb = XLSX.utils.book_new();
+
+  // ── Summary sheet ─────────────────────────────────────────────────────────
+  const summaryRows: any[][] = [
+    [{ v: 'Weekly Asset Status Report', t: 's', s: { ...S_TITLE, font: { ...S_TITLE.font, sz: 16 } } }],
+    [{ v: `Period: ${reportPeriod}`, t: 's', s: S_META }],
+    [{ v: `Generated: ${generatedAt}`, t: 's', s: S_META }],
+    [],
+    [
+      { v: 'Asset Type',     t: 's', s: S_HDR_ASSET },
+      { v: 'Assets Changed', t: 's', s: S_HDR_ASSET },
+    ],
+  ];
+  for (const type of ASSET_ENTITY_TYPES) {
+    const idSet = idsByType.get(type);
+    if (!idSet || idSet.size === 0) continue;
+    const cfg = ENTITY_TYPES[type];
+    summaryRows.push([
+      cell(cfg?.displayName || type, S_ROW_EVEN),
+      cell(idSet.size, S_ROW_EVEN),
+    ]);
+  }
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+  wsSummary['!cols'] = [{ wch: 22 }, { wch: 16 }];
+  wsSummary['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+  // ── Per-type sheets ────────────────────────────────────────────────────────
+  for (const type of ASSET_ENTITY_TYPES) {
+    const idSet = idsByType.get(type);
+    if (!idSet || idSet.size === 0) continue;
+    const assetMap = assetsByType.get(type) || new Map();
+    const cfg = ENTITY_TYPES[type];
+    const sheetName = cfg?.displayName || type;
+    const extraCols = EXTRA_COLS[type] || [];
+    const assetCols = [...COMMON_COLS, ...extraCols];
+    const allCols   = [...assetCols, ...LAST_CHANGE_COLS];
+
+    const titleAoa: any[][] = [
+      [{ v: `${sheetName} — Current State Report`, t: 's', s: { ...S_TITLE, font: { ...S_TITLE.font, sz: 13 } } }],
+      [{ v: `Period: ${reportPeriod}   |   ${idSet.size} asset(s) changed`, t: 's', s: S_META }],
+      [],
+      [
+        ...assetCols.map((c) => ({ v: c.label, t: 's', s: S_HDR_ASSET })),
+        ...LAST_CHANGE_COLS.map((c) => ({ v: c.label, t: 's', s: S_HDR_CHANGE })),
+      ],
+    ];
+
+    const dataRows = Array.from(idSet).map((assetId, ri) => {
+      const asset = assetMap.get(assetId) || {};
+      const emp = empMap.get(Number(asset.employee_id));
+      const s = ri % 2 === 0 ? S_ROW_EVEN : S_ROW_ODD;
+      const chg = lastChangeByAsset.get(`${type}:${assetId}`);
+      const action = chg?.action || '';
+
+      const getVal = (key: string): string => {
+        if (key === 'vendor_name')   return vendorMap.get(Number(asset.vendor_id)) ?? '';
+        if (key === 'status_name')   return statusMap.get(Number(asset.status_id)) ?? '';
+        if (key === 'location_name') return locationMap.get(Number(asset.location_id)) ?? '';
+        if (key === 'dept_name')     return deptMap.get(Number(asset.department_id)) ?? '';
+        if (key === 'employee_name') return emp?.name ?? '';
+        if (key === 'employee_code') return emp?.code ?? '';
+        if (key === '__last_change_date__') return chg ? fmtDate(chg.date) : '';
+        if (key === '__last_changed_by__')  return chg?.user ?? '';
+        if (key === '__last_action__')      return chg?.action ?? '';
+        const raw = asset[key];
+        if (raw == null) return '';
+        if (BOOL_KEYS.has(key)) return raw ? 'Yes' : 'No';
+        if (DATE_KEYS.has(key)) return fmtDate(raw);
+        // Auto-detect ISO dates
+        if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}(T|\s|$)/.test(raw)) return fmtDate(raw);
+        return String(raw);
+      };
+
+      return allCols.map((c) => {
+        const v = getVal(c.key);
+        if (c.key === '__last_action__') return cell(v, s, { bold: true, color: { rgb: ACTION_FONT[action] || '374151' } });
+        if (c.key === 'serial_number')   return cell(v, s, { bold: true });
+        if (asset.deleted_at && c.key === 'status_name') return cell(v, s, { color: { rgb: '991B1B' }, italic: true });
+        return cell(v, s);
+      });
+    });
+
+    const colWidths = allCols.map((c, ci) => {
+      let max = c.label.length;
+      for (const dr of dataRows) {
+        const len = String((dr[ci] as any).v ?? '').length;
+        if (len > max) max = len;
+      }
+      return { wch: Math.min(Math.max(max + 2, 10), 50) };
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([...titleAoa, ...dataRows]);
+    ws['!cols'] = colWidths;
+    ws['!rows'] = [{ hpt: 24 }, { hpt: 14 }, { hpt: 6 }, { hpt: 20 }];
+    ws['!views'] = [{ state: 'frozen', xSplit: 0, ySplit: 4, topLeftCell: 'A5' }];
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: allCols.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: allCols.length - 1 } },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+  }
+
+  const stamp = `${now2.getFullYear()}${String(now2.getMonth()+1).padStart(2,'0')}${String(now2.getDate()).padStart(2,'0')}`;
+  const filename = `weekly_report_${stamp}.xlsx`;
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buf);
+});
+
 auditRouter.get('/', async (req, res) => {
   const page = Math.max(1, Number(req.query.page || 1));
   const pageSize = Math.min(500, Math.max(1, Number(req.query.pageSize || 100)));
