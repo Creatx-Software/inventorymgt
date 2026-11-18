@@ -118,17 +118,20 @@ export default function AuditLogsPage() {
     } finally { setWeeklyLoading(false); }
   };
 
-  const load = async () => {
+  const load = async (overrides: { page?: number } = {}) => {
     setLoading(true);
     try {
-      const r = await auditLogsApi.list({ page, pageSize, search, action, entity_type: entityType, from, to });
+      const r = await auditLogsApi.list({ page: overrides.page ?? page, pageSize, search, action, entity_type: entityType, from, to });
       setData(r.data);
       setTotal(r.pagination.total);
     } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [page, pageSize]);
-  useEffect(() => { const t = setTimeout(() => { setPage(1); load(); }, 300); return () => clearTimeout(t); }, [search, action, entityType, from, to]);
+  useEffect(() => {
+    const t = setTimeout(() => { setPage(1); load({ page: 1 }); }, 300);
+    return () => clearTimeout(t);
+  }, [search, action, entityType, from, to]);
   useEffect(() => { auditLogsApi.entityTypes().then(setEntityTypes).catch(() => {}); }, []);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -165,7 +168,7 @@ export default function AuditLogsPage() {
           <button onClick={() => setShowReport(true)} className="btn-secondary">
             <FileSpreadsheet className="w-4 h-4" /> Changes Report
           </button>
-          <button onClick={load} className="btn-secondary">
+          <button onClick={() => load()} className="btn-secondary">
             <RefreshCw className={clsx('w-4 h-4', loading && 'animate-spin')} /> Refresh
           </button>
         </div>
