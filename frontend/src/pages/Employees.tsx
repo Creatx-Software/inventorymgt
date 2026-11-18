@@ -306,6 +306,84 @@ export default function EmployeesPage() {
     }
   };
 
+  const [copyAssetsDone, setCopyAssetsDone] = useState(false);
+  const copyAssetsToClipboard = async () => {
+    if (!editing) return;
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const tableStyle = 'border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt;width:100%;margin-bottom:16px;';
+    const thStyle    = 'background:#1e3a8a;color:#ffffff;font-weight:bold;padding:6px 10px;border:1px solid #3b82f6;text-align:left;white-space:nowrap;';
+    const tdEven     = 'padding:5px 10px;border:1px solid #cbd5e1;background:#ffffff;vertical-align:top;';
+    const tdOdd      = 'padding:5px 10px;border:1px solid #cbd5e1;background:#eff6ff;vertical-align:top;';
+    const groupHead  = 'font-family:Calibri,Arial,sans-serif;font-size:12pt;font-weight:bold;color:#1e3a8a;margin:16px 0 6px 0;';
+
+    const cols = [
+      { label: 'Asset Name',    key: 'asset_name' },
+      { label: 'Serial Number', key: 'serial_number' },
+      { label: 'Host Name',     key: 'host_name' },
+      { label: 'Model',         key: 'model' },
+      { label: 'Status',        key: 'status_name' },
+      { label: 'Location',      key: 'location_name' },
+    ];
+
+    const assetCount = assets?.totalCount ?? 0;
+    const consumableCount = consumables?.length ?? 0;
+    const title = `<p style="font-family:Calibri,Arial,sans-serif;font-size:14pt;font-weight:bold;color:#1e3a8a;margin:0 0 4px 0;">
+      Assigned Assets &amp; Consumables — ${esc(editing.full_name)}</p>
+      <p style="font-family:Calibri,Arial,sans-serif;font-size:10pt;color:#64748b;margin:0 0 12px 0;">
+      ${esc(editing.employee_code ?? '')}${editing.department_name ? ' · ' + esc(editing.department_name) : ''}${editing.location_name ? ' · ' + esc(editing.location_name) : ''}
+      &nbsp;&nbsp;|&nbsp;&nbsp;Assets: ${assetCount} &nbsp;·&nbsp; Consumables: ${consumableCount}</p>`;
+
+    const sections = (assets?.groups ?? []).map((group) => {
+      const headerRow = `<tr>${cols.map((c) => `<th style="${thStyle}">${esc(c.label)}</th>`).join('')}</tr>`;
+      const dataRows  = group.assets.map((asset, ri) => {
+        const td = ri % 2 === 0 ? tdEven : tdOdd;
+        return `<tr>${cols.map((c) => `<td style="${td}">${esc((asset as any)[c.key] ?? '')}</td>`).join('')}</tr>`;
+      }).join('');
+      return `<p style="${groupHead}">${esc(group.label)} (${group.count})</p>
+        <table style="${tableStyle}"><thead>${headerRow}</thead><tbody>${dataRows}</tbody></table>`;
+    }).join('');
+
+    // Consumables section
+    const consumablesSection = consumables && consumables.length > 0 ? (() => {
+      const cCols = [
+        { label: 'Item Name', key: 'name' },
+        { label: 'Category',  key: 'category' },
+        { label: 'Qty',       key: 'net_quantity' },
+        { label: 'Unit',      key: 'unit' },
+      ];
+      const headerRow = `<tr>${cCols.map((c) => `<th style="${thStyle}">${esc(c.label)}</th>`).join('')}</tr>`;
+      const dataRows  = consumables.map((item, ri) => {
+        const td = ri % 2 === 0 ? tdEven : tdOdd;
+        return `<tr>${cCols.map((c) => `<td style="${td}">${esc(String((item as any)[c.key] ?? ''))}</td>`).join('')}</tr>`;
+      }).join('');
+      return `<p style="${groupHead}">Consumables (${consumables.length})</p>
+        <table style="${tableStyle}"><thead>${headerRow}</thead><tbody>${dataRows}</tbody></table>`;
+    })() : '';
+
+    const html = `<div>${title}${sections}${consumablesSection}</div>`;
+
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) }),
+      ]);
+    } catch {
+      // fallback plain text
+      const lines = (assets?.groups ?? []).flatMap((g) => [
+        `\n${g.label}`,
+        'Asset Name\tSerial Number\tHost Name\tModel\tStatus\tLocation',
+        ...g.assets.map((a: any) => [a.asset_name, a.serial_number, a.host_name, a.model, a.status_name, a.location_name].map((v) => v ?? '').join('\t')),
+      ]);
+      if (consumables && consumables.length > 0) {
+        lines.push('\nConsumables', 'Item Name\tCategory\tQty\tUnit');
+        consumables.forEach((c) => lines.push(`${c.name}\t${c.category ?? ''}\t${c.net_quantity}\t${c.unit}`));
+      }
+      await navigator.clipboard.writeText(lines.join('\n'));
+    }
+    setCopyAssetsDone(true);
+    setTimeout(() => setCopyAssetsDone(false), 2000);
+  };
+
   const [exporting, setExporting] = useState(false);
   const downloadAssets = async () => {
     if (!editing) return;
@@ -457,15 +535,31 @@ export default function EmployeesPage() {
             <div>{editing && <button onClick={remove} className="btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Delete</button>}</div>
             <div className="flex gap-2">
               {editing && (
-                <button
-                  onClick={downloadAssets}
-                  disabled={exporting}
-                  className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                  title="Download all assigned assets as Excel"
-                >
-                  {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  Export
-                </button>
+                <>
+                  <button
+                    onClick={copyAssetsToClipboard}
+                    disabled={(!assets || assets.totalCount === 0) && (!consumables || consumables.length === 0)}
+                    className={clsx(
+                      'btn border transition-colors',
+                      copyAssetsDone
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+                    )}
+                    title="Copy assigned assets as HTML table — paste into Outlook"
+                  >
+                    {copyAssetsDone ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {copyAssetsDone ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    onClick={downloadAssets}
+                    disabled={exporting}
+                    className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                    title="Download all assigned assets as Excel"
+                  >
+                    {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    Export
+                  </button>
+                </>
               )}
               <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
               <button onClick={save} disabled={saving || !form.full_name} className="btn-primary">{saving ? 'Saving...' : 'Save'}</button>
