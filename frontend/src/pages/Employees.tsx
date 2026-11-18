@@ -79,6 +79,11 @@ export default function EmployeesPage() {
   const [commentSaving, setCommentSaving] = useState(false);
   const [returningId, setReturningId] = useState<number | null>(null);
   const [returningAssetId, setReturningAssetId] = useState<number | null>(null);
+  const [returnModal, setReturnModal] = useState<{
+    assetKey: string;
+    asset: { id: number; asset_name: string | null; serial_number: string };
+    locationId: string;
+  } | null>(null);
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
@@ -270,17 +275,31 @@ export default function EmployeesPage() {
 
   const handleReturnAsset = async (assetKey: string, asset: { id: number; asset_name: string | null; serial_number: string }) => {
     if (!editing) return;
-    const label = asset.asset_name || asset.serial_number;
-    if (!confirm(`Return "${label}" from ${editing.full_name}? Status will be set to "In Stores".`)) return;
-    setReturningAssetId(asset.id);
+    // Pre-fill with default return location from settings if set
+    const settings = await settingsApi.get().catch(() => ({} as any));
+    setReturnModal({
+      assetKey,
+      asset,
+      locationId: settings.default_return_location_id ? String(settings.default_return_location_id) : '',
+    });
+  };
+
+  const confirmReturn = async () => {
+    if (!returnModal || !editing) return;
+    if (!returnModal.locationId) { alert('Please select a return location.'); return; }
+    setReturningAssetId(returnModal.asset.id);
     try {
-      const [statuses, settings] = await Promise.all([assetStatusesApi.list(), settingsApi.get()]);
+      const statuses = await assetStatusesApi.list();
       const inStores = statuses.find((s) => s.name === 'In Stores');
       if (!inStores) throw new Error('Could not find "In Stores" status');
-      const patch: Record<string, any> = { employee_id: null, department_id: null, status_id: inStores.id };
-      if (settings.default_return_location_id) patch.location_id = Number(settings.default_return_location_id);
-      const resource = typeApiResource[assetKey];
-      await api.put(`/${resource}/${asset.id}`, patch);
+      const patch: Record<string, any> = {
+        employee_id: null,
+        department_id: null,
+        status_id: inStores.id,
+        location_id: Number(returnModal.locationId),
+      };
+      await api.put(`/${typeApiResource[returnModal.assetKey]}/${returnModal.asset.id}`, patch);
+      setReturnModal(null);
       await loadAssets();
     } finally {
       setReturningAssetId(null);
@@ -815,6 +834,48 @@ export default function EmployeesPage() {
               <button onClick={() => setBulkEditOpen(false)} className="btn-secondary">Cancel</button>
               <button onClick={saveBulkEdit} disabled={bulkSaving} className="btn-primary">
                 {bulkSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Apply Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Return Asset modal */}
+      {returnModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="card w-full max-w-sm p-6 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center">
+                <Undo2 className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <div className="font-semibold text-slate-900">Return Asset</div>
+                <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[220px]">
+                  {returnModal.asset.asset_name || returnModal.asset.serial_number}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="label">Return Location <span className="text-red-500">*</span></label>
+                <SearchableSelect
+                  value={returnModal.locationId}
+                  onChange={(val) => setReturnModal((m) => m ? { ...m, locationId: val } : m)}
+                  options={locations.map((l) => ({ value: String(l.id), label: l.name }))}
+                  placeholder="Select location…"
+                />
+              </div>
+              <p className="text-xs text-slate-400">Status will be set to <strong>In Stores</strong> and employee will be unassigned.</p>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setReturnModal(null)} className="btn-secondary">Cancel</button>
+              <button
+                onClick={confirmReturn}
+                disabled={!returnModal.locationId || returningAssetId !== null}
+                className="btn-primary"
+              >
+                {returningAssetId !== null ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                Confirm Return
               </button>
             </div>
           </div>
