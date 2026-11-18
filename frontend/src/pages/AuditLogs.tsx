@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auditLogsApi, type AuditLog, type AuditEntityType } from '../api/operations';
 import {
@@ -380,63 +380,86 @@ function parseChanges(raw: any): any {
   return raw;
 }
 
+// Human-readable labels for common DB column names
+const FIELD_LABELS: Record<string, string> = {
+  serial_number: 'Serial Number', asset_name: 'Asset Name', model: 'Model',
+  vendor_id: 'Vendor', vendor_name: 'Vendor',
+  status_id: 'Status', status_name: 'Status',
+  location_id: 'Location', location_name: 'Location',
+  department_id: 'Department', department_name: 'Department',
+  employee_id: 'Assigned To', employee_name: 'Assigned To',
+  po_number: 'PO Number', invoice_number: 'Invoice Number', remarks: 'Remarks',
+  host_name: 'Host Name', ip_address: 'IP Address', mac_address: 'MAC Address',
+  os_name_version: 'OS / Version', endpoint_type: 'Type',
+  is_under_warranty: 'Under Warranty', warranty_expiry_date: 'Warranty Expiry',
+  eol_date: 'EOL Date', asset_code: 'Asset Code',
+  application_name: 'Application', environment: 'Environment',
+  server_class: 'Server Class', server_type: 'Server Type',
+  hardening_status: 'Hardening', patching_status: 'Patching',
+  device_name: 'Device Name', mobile_number: 'Mobile Number',
+  imei_number: 'IMEI', sim_number: 'SIM', eid: 'EID',
+  phone_number: 'Phone Number', is_recording_enabled: 'Recording',
+  full_name: 'Full Name', email: 'Email', employee_code: 'Employee ID',
+  is_active: 'Active', needs_review: 'Needs Review',
+  name: 'Name', description: 'Description', category: 'Category',
+  current_stock: 'Stock', minimum_stock: 'Min Stock', unit: 'Unit',
+};
+
+const SKIP_KEYS = new Set(['id', 'created_at', 'updated_at', 'deleted_at',
+  'vendor_name', 'status_name', 'location_name', 'department_name', 'employee_name',
+  'employee_code', 'status_color', 'has_pending_approval']);
+
+function fieldLabel(key: string): string {
+  return FIELD_LABELS[key] ?? key.replace(/_id$/, '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function fmtVal(v: any): React.ReactNode {
+  if (v == null || v === '') return <span className="italic text-slate-400">empty</span>;
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  // FK shape stored by crud.controller { id, name } or plain joined field
+  if (typeof v === 'object' && v !== null) {
+    const label = v.name ?? v.label ?? v.full_name ?? null;
+    if (label) return <span>{label}<span className="text-slate-400 text-[10px] ml-1">#{v.id}</span></span>;
+    return <code className="text-[11px]">{JSON.stringify(v)}</code>;
+  }
+  // ISO date → DD/MM/YYYY
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}(T|\s|$)/.test(v)) {
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : v;
+  }
+  return String(v);
+}
+
+function normaliseForCompare(v: any): any {
+  if (v && typeof v === 'object') return v.id ?? JSON.stringify(v);
+  return v;
+}
+
 function AuditDetailModal({ log, onClose, onGotoEntity }: { log: AuditLog; onClose: () => void; onGotoEntity: () => void }) {
   const meta = ACTION_META[log.action] || { label: log.action, icon: Pencil, color: 'slate', verb: log.action.toLowerCase() };
   const colors = COLOR_CLASSES[meta.color];
   const Icon = meta.icon;
   const changes = parseChanges(log.changes);
 
-  // For UPDATE — try to render before/after diff
   const isDiff = log.action === 'UPDATE' && changes && typeof changes === 'object'
     && 'before' in changes && 'after' in changes;
 
   const diffRows = (() => {
     if (!isDiff) return null;
-    const before = changes.before || {};
-    const after = changes.after || {};
+    const before: Record<string, any> = changes.before || {};
+    const after: Record<string, any>  = changes.after  || {};
     const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
-    const SKIP = ['id', 'created_at', 'updated_at', 'deleted_at'];
-    const normalize = (v: any) => {
-      // Compare FK { id, label } objects by id only
-      if (v && typeof v === 'object' && 'id' in v && 'label' in v && Object.keys(v).length === 2) {
-        return v.id;
-      }
-      return v;
-    };
     return keys
-      .filter((k) => !SKIP.includes(k))
-      .map((k) => {
-        const b = before[k];
-        const a = after[k];
-        const same = JSON.stringify(normalize(b)) === JSON.stringify(normalize(a));
-        return { key: k, before: b, after: a, same };
-      })
-      .filter((r) => !r.same);
+      .filter((k) => !SKIP_KEYS.has(k))
+      .map((k) => ({ key: k, before: before[k], after: after[k] }))
+      .filter((r) => JSON.stringify(normaliseForCompare(r.before)) !== JSON.stringify(normaliseForCompare(r.after)));
   })();
-
-  const fmt = (v: any) => {
-    if (v == null) return <span className="text-slate-300 italic">empty</span>;
-    if (typeof v === 'boolean') return v ? 'true' : 'false';
-    // FK reference shape: { id, label }
-    if (v && typeof v === 'object' && 'id' in v && 'label' in v && Object.keys(v).length === 2) {
-      if (v.label) {
-        return (
-          <span>
-            {v.label}
-            <span className="text-slate-400 text-xs ml-1">#{v.id}</span>
-          </span>
-        );
-      }
-      return <span className="font-mono text-xs">#{v.id}</span>;
-    }
-    if (typeof v === 'object') return <code className="text-xs">{JSON.stringify(v)}</code>;
-    return String(v);
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+        {/* Header */}
         <div className="px-6 h-16 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className={clsx('w-9 h-9 rounded-lg flex items-center justify-center', colors.bg, colors.text)}>
@@ -451,10 +474,10 @@ function AuditDetailModal({ log, onClose, onGotoEntity }: { log: AuditLog; onClo
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Summary */}
+          {/* Meta summary */}
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider">User</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider">Changed By</div>
               <div className="font-medium text-slate-900 mt-0.5">{log.user_full_name || log.username || 'System'}</div>
               {log.username && log.user_full_name && <div className="text-xs text-slate-500">{log.username}</div>}
             </div>
@@ -465,15 +488,12 @@ function AuditDetailModal({ log, onClose, onGotoEntity }: { log: AuditLog; onClo
               </span>
             </div>
             <div className="col-span-2">
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Entity</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider">Record</div>
               {log.entity_label ? (
                 <button
                   onClick={log.entity_link ? onGotoEntity : undefined}
                   disabled={!log.entity_link}
-                  className={clsx(
-                    'mt-0.5 inline-flex items-center gap-2 text-left',
-                    log.entity_link && 'text-brand-700 hover:underline',
-                  )}
+                  className={clsx('mt-0.5 inline-flex items-center gap-2 text-left', log.entity_link && 'text-brand-700 hover:underline')}
                 >
                   <span className="font-medium">{log.entity_label}</span>
                   {log.entity_secondary && <span className="text-xs text-slate-500">· {log.entity_secondary}</span>}
@@ -486,32 +506,49 @@ function AuditDetailModal({ log, onClose, onGotoEntity }: { log: AuditLog; onClo
               )}
             </div>
             {log.ip_address && (
-              <div className="col-span-2">
+              <div>
                 <div className="text-xs text-slate-500 uppercase tracking-wider">IP Address</div>
                 <div className="font-mono text-xs text-slate-700 mt-0.5">{log.ip_address}</div>
               </div>
             )}
           </div>
 
-          {/* Diff view for UPDATE */}
+          {/* ── Diff table (UPDATE with before/after) ── */}
           {diffRows && diffRows.length > 0 && (
             <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Changes ({diffRows.length} {diffRows.length === 1 ? 'field' : 'fields'})</div>
-              <div className="card overflow-hidden">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  What Changed
+                </div>
+                <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">
+                  {diffRows.length} {diffRows.length === 1 ? 'field' : 'fields'}
+                </span>
+              </div>
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-600">Field</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-600">Before</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-600">After</th>
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-32">Field</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-red-500">Before</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-600">After</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {diffRows.map((r) => (
-                      <tr key={r.key} className="border-t border-slate-100">
-                        <td className="px-3 py-2 font-mono text-xs text-slate-600">{r.key}</td>
-                        <td className="px-3 py-2 text-slate-700"><div className="rounded bg-red-50 px-2 py-0.5 inline-block">{fmt(r.before)}</div></td>
-                        <td className="px-3 py-2 text-slate-700"><div className="rounded bg-emerald-50 px-2 py-0.5 inline-block">{fmt(r.after)}</div></td>
+                    {diffRows.map((r, i) => (
+                      <tr key={r.key} className={clsx('border-t border-slate-100', i % 2 === 1 && 'bg-slate-50/50')}>
+                        <td className="px-4 py-2.5 font-medium text-slate-700 text-sm whitespace-nowrap">
+                          {fieldLabel(r.key)}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-red-50 border border-red-100 text-red-700 text-sm font-medium max-w-[220px] truncate">
+                            {fmtVal(r.before)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-medium max-w-[220px] truncate">
+                            {fmtVal(r.after)}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -520,16 +557,18 @@ function AuditDetailModal({ log, onClose, onGotoEntity }: { log: AuditLog; onClo
             </div>
           )}
 
-          {/* Diff view but no diffs (only metadata changed) */}
+          {/* No changed fields detected */}
           {diffRows && diffRows.length === 0 && (
-            <div className="text-xs text-slate-500 italic">No field changes (metadata-only update)</div>
+            <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-500 italic">
+              No field changes detected (metadata-only update).
+            </div>
           )}
 
-          {/* Raw payload for non-UPDATE actions */}
+          {/* Non-UPDATE or old-format payload */}
           {!isDiff && changes && (
             <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Payload</div>
-              <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-x-auto max-h-80">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Payload</div>
+              <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 overflow-x-auto max-h-80 text-slate-700">
                 {JSON.stringify(changes, null, 2)}
               </pre>
             </div>
