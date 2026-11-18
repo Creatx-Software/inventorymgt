@@ -103,8 +103,13 @@ export default function AuditLogsPage() {
       const a = document.createElement('a');
       const disposition = r.headers['content-disposition'] ?? '';
       const match = disposition.match(/filename="([^"]+)"/);
+      const fromStr = weeklyFrom.replace(/-/g, '');
+      const toStr   = weeklyTo.replace(/-/g, '');
+      const fallback = weeklyFrom && weeklyTo
+        ? `weekly_report_${fromStr}_to_${toStr}.xlsx`
+        : `weekly_report.xlsx`;
       a.href = url;
-      a.download = match?.[1] ?? 'weekly_report.xlsx';
+      a.download = match?.[1] ?? fallback;
       a.click();
       URL.revokeObjectURL(url);
       setShowWeekly(false);
