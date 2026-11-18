@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-table';
 import {
   Search, Plus, Trash2, Download, RefreshCw, Settings2, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, Loader2, X, Trash, RotateCcw, SlidersHorizontal, ChevronDown,
+  ArrowUp, ArrowDown, Loader2, X, Trash, RotateCcw, SlidersHorizontal, ChevronDown, Copy, Check,
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { ListParams, PaginatedResponse } from '../../types/api';
@@ -73,15 +73,22 @@ function MultiSelectDropdown({
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-1 z-50 w-48 min-w-full bg-white border border-slate-200 rounded-lg shadow-lg py-1 max-h-56 overflow-y-auto">
-          {selected.length > 0 && (
-            <button
-              type="button"
-              onClick={() => { onChange([]); setOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-brand-600 hover:bg-brand-50 font-medium"
-            >
-              Clear selection
-            </button>
-          )}
+          {/* Select All row */}
+          <label className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 cursor-pointer border-b border-slate-100">
+            <input
+              type="checkbox"
+              checked={selected.length === options.length && options.length > 0}
+              ref={(el) => {
+                if (el) el.indeterminate = selected.length > 0 && selected.length < options.length;
+              }}
+              onChange={() => {
+                if (selected.length === options.length) onChange([]);
+                else onChange(options.map((o) => o.value));
+              }}
+              className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600"
+            />
+            <span className="truncate text-slate-700">Select All</span>
+          </label>
           {options.map((o) => (
             <label
               key={o.value}
@@ -407,6 +414,82 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
     XLSX.writeFile(wb, `${title.toLowerCase().replace(/\s+/g, '_')}_${stamp}.xlsx`);
   };
 
+  const [copyDone, setCopyDone] = useState(false);
+
+  const copyRowsToClipboard = useCallback(async (ids?: number[]) => {
+    const visibleCols = table.getVisibleLeafColumns().filter((c) => c.id !== '__select__');
+    const headers = visibleCols.map((c) =>
+      typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id,
+    );
+
+    const BOOL_COLS = new Set(['is_under_warranty', 'data_wiped', 'hardening_status', 'patching_status', 'is_recording_enabled']);
+    const fmtDate = (v: any): string => {
+      if (!v) return '';
+      const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[3]}/${m[2]}/${m[1]}` : String(v);
+    };
+    const DATE_COLS = new Set(['warranty_expiry_date', 'eol_date', 'assigned_date', 'returned_date',
+      'created_at', 'updated_at', 'deleted_at', 'transaction_date', 'date', 'start_datetime', 'end_datetime']);
+
+    const rows = ids ? data.filter((r) => ids.includes(r.id)) : data;
+    const bodyRows = rows.map((row) =>
+      visibleCols.map((c) => {
+        const val = (row as any)[c.id];
+        if (val == null) return '';
+        if (BOOL_COLS.has(c.id)) return val ? 'Yes' : 'No';
+        if (DATE_COLS.has(c.id)) return fmtDate(val);
+        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}(T|\s|$)/.test(val)) return fmtDate(val);
+        return String(val);
+      }),
+    );
+
+    // Build HTML table — renders with borders in Outlook / Word
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const tableStyle = 'border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt;';
+    const thStyle = 'background:#1e3a8a;color:#ffffff;font-weight:bold;padding:6px 10px;border:1px solid #3b82f6;text-align:left;white-space:nowrap;';
+    const tdEven  = 'padding:5px 10px;border:1px solid #cbd5e1;background:#ffffff;vertical-align:top;';
+    const tdOdd   = 'padding:5px 10px;border:1px solid #cbd5e1;background:#eff6ff;vertical-align:top;';
+
+    const headerRow = `<tr>${headers.map((h) => `<th style="${thStyle}">${esc(h)}</th>`).join('')}</tr>`;
+    const dataRows  = bodyRows.map((cells, ri) => {
+      const td = ri % 2 === 0 ? tdEven : tdOdd;
+      return `<tr>${cells.map((c) => `<td style="${td}">${esc(c)}</td>`).join('')}</tr>`;
+    }).join('');
+    const html = `<table style="${tableStyle}">${headerRow}${dataRows}</table>`;
+
+    // Also build TSV for plain-text fallback (Excel paste)
+    const tsv = [headers, ...bodyRows].map((r) => r.join('\t')).join('\n');
+
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html':  new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([tsv],  { type: 'text/plain' }),
+        }),
+      ]);
+    } catch {
+      // Fallback for browsers that don't support ClipboardItem
+      await navigator.clipboard.writeText(tsv);
+    }
+
+    setCopyDone(true);
+    setTimeout(() => setCopyDone(false), 2000);
+  }, [table, data]);
+
+  // Ctrl+C copies selected rows (or all if none selected) when not in an input
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'c' && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
+        if (hasSelection) {
+          e.preventDefault();
+          copyRowsToClipboard(selectedIds);
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [hasSelection, selectedIds, copyRowsToClipboard]);
+
   const stickyOffsets = useMemo(() => {
     const offsets: Record<string, number> = { __select__: 0 };
     let acc = 40;
@@ -441,6 +524,14 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
             </button>
           )}
           {typeof extraActions === 'function' ? extraActions({ selectedIds }) : extraActions}
+          <button
+            onClick={() => copyRowsToClipboard(hasSelection ? selectedIds : undefined)}
+            className={clsx('btn-secondary transition-colors', copyDone && 'border-emerald-300 bg-emerald-50 text-emerald-700')}
+            title={hasSelection ? `Copy ${selectedIds.length} selected row(s)` : 'Copy all rows'}
+          >
+            {copyDone ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copyDone ? 'Copied!' : hasSelection ? `Copy (${selectedIds.length})` : 'Copy'}
+          </button>
           <button onClick={exportXlsx} className="btn-secondary"><Download className="w-4 h-4" /> Export</button>
           <button onClick={load} className="btn-secondary" title="Refresh"><RefreshCw className={clsx('w-4 h-4', loading && 'animate-spin')} /></button>
           <div className="relative">

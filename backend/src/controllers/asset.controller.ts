@@ -54,10 +54,11 @@ export function buildAssetRouter(opts: AssetCrudOptions) {
   router.put('/:id', requirePermission(`${perm}_edit`), async (req: AuthRequest, res) => {
     try {
       const id = Number(req.params.id);
+      const before = await svc.get(id);
       await svc.update(id, req.body, req.user!.id, req.user!.isSuperAdmin);
-      const row = await svc.get(id);
-      await audit({ userId: req.user!.id, action: 'UPDATE', entityType: opts.assetType, entityId: id, changes: req.body, ipAddress: req.ip });
-      res.json(row);
+      const after = await svc.get(id);
+      await audit({ userId: req.user!.id, action: 'UPDATE', entityType: opts.assetType, entityId: id, changes: { before, after }, ipAddress: req.ip });
+      res.json(after);
     } catch (e: any) {
       res.status(400).json({ error: e.message });
     }
