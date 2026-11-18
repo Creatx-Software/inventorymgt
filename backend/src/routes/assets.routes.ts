@@ -1,6 +1,6 @@
 import { buildAssetRouter } from '../controllers/asset.controller';
 
-const commonSearch = ['serial_number', 'sap_asset_code', 'asset_name', 'model', 'po_number', 'invoice_number'];
+const commonSearch = ['serial_number', 'sap_asset_code', 'asset_name', 'model', 'po_number', 'invoice_number', 'remarks'];
 const commonSort = [
   'id', 'serial_number', 'sap_asset_code', 'asset_name', 'model', 'created_at', 'updated_at',
   'vendor_id', 'location_id', 'department_id', 'employee_id', 'status_id',
@@ -22,7 +22,7 @@ const commonBulkEditable = [
 export const endpointsRouter = buildAssetRouter({
   table: 'endpoints',
   assetType: 'endpoint',
-  searchableColumns: [...commonSearch, 'host_name', 'asset_code', 'mac_address', 'ip_address', 'os_name_version'],
+  searchableColumns: [...commonSearch, 'host_name', 'asset_code', 'mac_address', 'ip_address', 'os_name_version', 'endpoint_type'],
   allowedSortColumns: [...commonSort, 'endpoint_type', 'host_name', 'warranty_expiry_date', 'eol_date', 'status_name'],
   allowedFilterColumns: [...commonFilter, 'endpoint_type', 'host_name', 'asset_code', 'ip_address'],
   bulkEditableFields: [...commonBulkEditable, 'endpoint_type', 'is_under_warranty', 'warranty_expiry_date', 'eol_date'],
@@ -42,7 +42,7 @@ export const monitorsRouter = buildAssetRouter({
 export const mobileDevicesRouter = buildAssetRouter({
   table: 'mobile_devices',
   assetType: 'mobile_device',
-  searchableColumns: [...commonSearch, 'eid', 'mobile_number', 'sim_number', 'imei_number'],
+  searchableColumns: [...commonSearch, 'eid', 'mobile_number', 'sim_number', 'imei_number', 'production_year'],
   allowedSortColumns: [...commonSort, 'production_year'],
   allowedFilterColumns: [...commonFilter, 'mobile_number', 'imei_number'],
   bulkEditableFields: [...commonBulkEditable],
@@ -52,7 +52,7 @@ export const mobileDevicesRouter = buildAssetRouter({
 export const ipPhonesRouter = buildAssetRouter({
   table: 'ip_phones',
   assetType: 'ip_phone',
-  searchableColumns: [...commonSearch, 'mac_address', 'phone_number'],
+  searchableColumns: [...commonSearch, 'mac_address', 'phone_number', 'extension_number'],
   allowedSortColumns: [...commonSort, 'mac_address', 'phone_number', 'is_recording_enabled'],
   allowedFilterColumns: [...commonFilter, 'mac_address', 'phone_number', 'is_recording_enabled'],
   bulkEditableFields: [...commonBulkEditable],
@@ -62,7 +62,7 @@ export const ipPhonesRouter = buildAssetRouter({
 export const serversRouter = buildAssetRouter({
   table: 'servers',
   assetType: 'server',
-  searchableColumns: [...commonSearch, 'application_name', 'host_name', 'ip_address', 'can_id', 'os_name_version'],
+  searchableColumns: [...commonSearch, 'application_name', 'host_name', 'ip_address', 'can_id', 'os_name_version', 'asset_code', 'dc_location', 'managed_by', 'server_software', 'exception_memo_no'],
   allowedSortColumns: [...commonSort, 'application_name', 'environment', 'application_tier', 'warranty_expiry_date', 'eol_date'],
   allowedFilterColumns: [...commonFilter, 'application_name', 'environment', 'server_type', 'server_class', 'application_tier', 'managed_by', 'dc_location'],
   bulkEditableFields: [
@@ -77,7 +77,7 @@ export const serversRouter = buildAssetRouter({
 export const printersRouter = buildAssetRouter({
   table: 'printers',
   assetType: 'printer',
-  searchableColumns: [...commonSearch, 'device_name', 'host_name', 'ip_address'],
+  searchableColumns: [...commonSearch, 'device_name', 'host_name', 'ip_address', 'managed_by'],
   allowedSortColumns: [...commonSort, 'device_name', 'eol_date'],
   allowedFilterColumns: [...commonFilter, 'device_name', 'host_name', 'managed_by'],
   bulkEditableFields: [...commonBulkEditable, 'managed_by', 'eol_date'],
@@ -87,7 +87,7 @@ export const printersRouter = buildAssetRouter({
 export const networkDevicesRouter = buildAssetRouter({
   table: 'network_devices',
   assetType: 'network_device',
-  searchableColumns: [...commonSearch, 'device_name', 'host_name', 'ip_address', 'asset_code'],
+  searchableColumns: [...commonSearch, 'device_name', 'host_name', 'ip_address', 'asset_code', 'managed_by'],
   allowedSortColumns: [...commonSort, 'device_name', 'warranty_expiry_date', 'eol_date'],
   allowedFilterColumns: [...commonFilter, 'device_name', 'host_name', 'managed_by'],
   bulkEditableFields: [...commonBulkEditable, 'managed_by', 'warranty_expiry_date', 'eol_date'],
@@ -97,7 +97,7 @@ export const networkDevicesRouter = buildAssetRouter({
 export const otherAssetsRouter = buildAssetRouter({
   table: 'other_assets',
   assetType: 'other_asset',
-  searchableColumns: [...commonSearch, 'host_name'],
+  searchableColumns: [...commonSearch, 'host_name', 'sap_asset_code'],
   allowedSortColumns: [...commonSort, 'host_name'],
   allowedFilterColumns: [...commonFilter, 'host_name'],
   bulkEditableFields: [...commonBulkEditable],
