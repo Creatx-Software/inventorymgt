@@ -73,15 +73,22 @@ function MultiSelectDropdown({
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-1 z-50 w-48 min-w-full bg-white border border-slate-200 rounded-lg shadow-lg py-1 max-h-56 overflow-y-auto">
-          {selected.length > 0 && (
-            <button
-              type="button"
-              onClick={() => { onChange([]); setOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-brand-600 hover:bg-brand-50 font-medium"
-            >
-              Clear selection
-            </button>
-          )}
+          {/* Select All row */}
+          <label className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 cursor-pointer border-b border-slate-100">
+            <input
+              type="checkbox"
+              checked={selected.length === options.length && options.length > 0}
+              ref={(el) => {
+                if (el) el.indeterminate = selected.length > 0 && selected.length < options.length;
+              }}
+              onChange={() => {
+                if (selected.length === options.length) onChange([]);
+                else onChange(options.map((o) => o.value));
+              }}
+              className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600"
+            />
+            <span className="truncate text-slate-700">Select All</span>
+          </label>
           {options.map((o) => (
             <label
               key={o.value}
