@@ -807,7 +807,11 @@ auditRouter.get('/', async (req, res) => {
       q.where((sub: any) => {
         sub.where('audit_logs.entity_type', 'like', term)
           .orWhere('users.username', 'like', term)
-          .orWhere('users.full_name', 'like', term);
+          .orWhere('users.full_name', 'like', term)
+          .orWhere('audit_logs.action', 'like', term)
+          .orWhere('audit_logs.ip_address', 'like', term)
+          .orWhereRaw('CAST(audit_logs.entity_id AS CHAR) LIKE ?', [term])
+          .orWhereRaw('JSON_SEARCH(LOWER(CAST(audit_logs.changes AS CHAR)), "one", LOWER(?)) IS NOT NULL', [term]);
       });
     }
     return q;
