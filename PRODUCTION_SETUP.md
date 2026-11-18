@@ -259,6 +259,8 @@ cd ../frontend && npm install && npm run build
 
 pm2 restart ecosystem.config.js --update-env
 ```
+##ALL IN ONE
+.\deploy.ps1
 
 ---
 

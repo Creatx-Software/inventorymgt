@@ -54,7 +54,9 @@ export interface Employee {
   full_name: string;
   email: string | null;
   department_id: number | null;
+  department_name: string | null;
   location_id: number | null;
+  location_name: string | null;
   is_active: boolean;
   needs_review: boolean;
   deleted_at: string | null;
