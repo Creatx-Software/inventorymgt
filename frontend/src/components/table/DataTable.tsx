@@ -371,11 +371,18 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
         } else if (col.key === '__data_checked_by__') {
           val = (row as any).data_checked_by ?? '';
         } else {
-          val = (row as any)[col.key] ?? '';
-          if (BOOL_COLS.has(col.key)) val = val ? 'Yes' : 'No';
-          else if (DATE_COLS.has(col.key)) val = fmtDate(val);
-          // Auto-detect any remaining ISO date/datetime strings
-          else if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}(T|\s|$)/.test(val)) val = fmtDate(val);
+          // Use exportValue from column meta if defined (resolves FK ids, booleans, etc.)
+          const colDef = visibleCols.find((c) => c.id === col.key)?.columnDef;
+          const exportFn = (colDef?.meta as any)?.exportValue;
+          if (exportFn) {
+            val = exportFn(row);
+          } else {
+            val = (row as any)[col.key] ?? '';
+            if (BOOL_COLS.has(col.key)) val = val ? 'Yes' : 'No';
+            else if (DATE_COLS.has(col.key)) val = fmtDate(val);
+            // Auto-detect any remaining ISO date/datetime strings
+            else if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}(T|\s|$)/.test(val)) val = fmtDate(val);
+          }
         }
         return { v: val === '' || val == null ? '' : val, t: typeof val === 'number' ? 'n' : 's', s };
       });
@@ -391,9 +398,14 @@ export function DataTable<T extends { id: number; deleted_at?: string | null }>(
         if (col.key === '__emp_code__') val = String((row as any).employee_code ?? '');
         else if (col.key === '__data_wiped_by__') val = String((row as any).data_wiped_by ?? '');
         else if (col.key === '__data_checked_by__') val = String((row as any).data_checked_by ?? '');
-        else if (BOOL_COLS.has(col.key)) val = (row as any)[col.key] ? 'Yes' : 'No';
-        else if (DATE_COLS.has(col.key)) val = fmtDate((row as any)[col.key]);
-        else val = String((row as any)[col.key] ?? '');
+        else {
+          const colDef2 = visibleCols.find((c) => c.id === col.key)?.columnDef;
+          const exportFn2 = (colDef2?.meta as any)?.exportValue;
+          if (exportFn2) val = String(exportFn2(row) ?? '');
+          else if (BOOL_COLS.has(col.key)) val = (row as any)[col.key] ? 'Yes' : 'No';
+          else if (DATE_COLS.has(col.key)) val = fmtDate((row as any)[col.key]);
+          else val = String((row as any)[col.key] ?? '');
+        }
         if (val.length > max) max = val.length;
       });
       return { wch: Math.min(Math.max(max + 2, 10), 45) };
