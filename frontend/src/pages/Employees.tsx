@@ -148,11 +148,12 @@ export default function EmployeesPage() {
       ),
     },
     { accessorKey: 'email', header: 'Email', size: 240, cell: (i) => i.getValue() || <span className="text-slate-300">—</span> },
-    { accessorKey: 'department_id', header: 'Department', size: 180, cell: (i) => deptName(i.getValue() as number | null) },
-    { accessorKey: 'location_id', header: 'Primary Location', size: 180, cell: (i) => locName(i.getValue() as number | null) },
-    { accessorKey: 'secondary_location_id', header: 'Secondary Location', size: 180, cell: (i) => locName(i.getValue() as number | null) || <span className="text-slate-300">—</span> },
+    { accessorKey: 'department_id', header: 'Department', size: 180, cell: (i) => deptName(i.getValue() as number | null), meta: { exportValue: (row: any) => deptName(row.department_id) } },
+    { accessorKey: 'location_id', header: 'Primary Location', size: 180, cell: (i) => locName(i.getValue() as number | null), meta: { exportValue: (row: any) => locName(row.location_id) } },
+    { accessorKey: 'secondary_location_id', header: 'Secondary Location', size: 180, cell: (i) => locName(i.getValue() as number | null) || <span className="text-slate-300">—</span>, meta: { exportValue: (row: any) => locName(row.secondary_location_id) } },
     {
       accessorKey: 'is_active', header: 'Active', size: 90,
+      meta: { exportValue: (row: any) => row.is_active ? 'Active' : 'Inactive' },
       cell: (i) => i.getValue() ? (
         <span className="px-2 py-0.5 text-[11px] font-medium rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">Active</span>
       ) : (
