@@ -253,8 +253,10 @@ export default function EmployeesPage() {
   };
 
   useEffect(() => {
-    if (tab === 'assets' && editing) loadAssets();
-    if (tab === 'consumables' && editing) loadConsumables();
+    if (editing) { loadAssets(); loadConsumables(); }
+  }, [editing]);
+
+  useEffect(() => {
     if (tab === 'comments' && editing) loadComments();
   }, [tab, editing]);
 
