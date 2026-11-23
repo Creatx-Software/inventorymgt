@@ -52,7 +52,7 @@ export const mobileDevicesRouter = buildAssetRouter({
 export const ipPhonesRouter = buildAssetRouter({
   table: 'ip_phones',
   assetType: 'ip_phone',
-  searchableColumns: [...commonSearch, 'mac_address', 'phone_number', 'extension_number'],
+  searchableColumns: [...commonSearch, 'mac_address', 'phone_number'],
   allowedSortColumns: [...commonSort, 'mac_address', 'phone_number', 'is_recording_enabled'],
   allowedFilterColumns: [...commonFilter, 'mac_address', 'phone_number', 'is_recording_enabled'],
   bulkEditableFields: [...commonBulkEditable],
