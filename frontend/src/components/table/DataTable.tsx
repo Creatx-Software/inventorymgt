@@ -37,20 +37,31 @@ function MultiSelectDropdown({
   placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setSearch(''); }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+    else setSearch('');
+  }, [open]);
+
   const toggle = (val: string) => {
     if (selected.includes(val)) onChange(selected.filter((v) => v !== val));
     else onChange([...selected, val]);
   };
+
+  const filtered = search.trim()
+    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options;
 
   const displayLabel = selected.length === 0
     ? placeholder
@@ -72,8 +83,22 @@ function MultiSelectDropdown({
         <ChevronDown className="w-3.5 h-3.5 shrink-0 text-slate-400" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-48 min-w-full bg-white border border-slate-200 rounded-lg shadow-lg py-1 max-h-56 overflow-y-auto">
+        <div className="absolute left-0 top-full mt-1 z-50 w-48 min-w-full bg-white border border-slate-200 rounded-lg shadow-lg py-1 max-h-64 flex flex-col">
+          {/* Search input */}
+          <div className="px-2 py-1.5 border-b border-slate-100 shrink-0">
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search..."
+              className="w-full px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-brand-400"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="overflow-y-auto flex-1">
           {/* Select All row */}
+          {!search && (
           <label className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 cursor-pointer border-b border-slate-100">
             <input
               type="checkbox"
@@ -89,7 +114,11 @@ function MultiSelectDropdown({
             />
             <span className="truncate text-slate-700">Select All</span>
           </label>
-          {options.map((o) => (
+          )}
+          {filtered.length === 0 && (
+            <p className="px-3 py-2 text-xs text-slate-400">No matches</p>
+          )}
+          {filtered.map((o) => (
             <label
               key={o.value}
               className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50 cursor-pointer"
@@ -103,6 +132,7 @@ function MultiSelectDropdown({
               <span className="truncate">{o.label}</span>
             </label>
           ))}
+          </div>
         </div>
       )}
     </div>
