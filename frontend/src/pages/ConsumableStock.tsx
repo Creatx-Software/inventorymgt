@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { PackagePlus, ArrowDownToLine, UserPlus, RotateCcw, History, Search, X, Pencil, Check } from 'lucide-react';
+import { PackagePlus, ArrowDownToLine, UserPlus, RotateCcw, History, Search, X, Pencil, Check, Users } from 'lucide-react';
 import clsx from 'clsx';
 import { DataTable } from '../components/table/DataTable';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
@@ -227,6 +227,29 @@ export default function ConsumableStockPage() {
     }
   };
 
+  // ── Current Holders drawer ──────────────────────────────────────────────────
+  const [holdersOpen, setHoldersOpen] = useState(false);
+  const [holdersItem, setHoldersItem] = useState<ConsumableItem | null>(null);
+  const [holdersData, setHoldersData] = useState<ConsumableAssignment[]>([]);
+  const [holdersLoading, setHoldersLoading] = useState(false);
+  const [holdersSearch, setHoldersSearch] = useState('');
+
+  const openHolders = async (item: ConsumableItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHoldersItem(item);
+    setHoldersSearch('');
+    setHoldersOpen(true);
+    setHoldersLoading(true);
+    try {
+      const data = await consumablesApi.getAssignments(item.id);
+      setHoldersData(data);
+    } catch {
+      setHoldersData([]);
+    } finally {
+      setHoldersLoading(false);
+    }
+  };
+
   // ── History drawer ──────────────────────────────────────────────────────────
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyItem, setHistoryItem] = useState<ConsumableItem | null>(null);
@@ -339,6 +362,13 @@ export default function ConsumableStockPage() {
                 </button>
               </>
             )}
+            <button
+              title="Current Holders"
+              onClick={(e) => openHolders(item, e)}
+              className="p-1.5 rounded hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 transition"
+            >
+              <Users className="w-3.5 h-3.5" />
+            </button>
             <button
               title="Transaction History"
               onClick={(e) => openHistory(item, e)}
@@ -1048,6 +1078,71 @@ export default function ConsumableStockPage() {
               ))}
             </div>
           )
+        )}
+      </Drawer>
+
+      {/* ── Current Holders drawer ───────────────────────────────────────── */}
+      <Drawer
+        open={holdersOpen}
+        onClose={() => setHoldersOpen(false)}
+        title={holdersItem ? `Current Holders — ${holdersItem.name}` : 'Current Holders'}
+        subtitle={holdersItem ? `${holdersData.length} employee${holdersData.length !== 1 ? 's' : ''} holding this item` : ''}
+        width="sm"
+      >
+        {holdersLoading ? (
+          <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" /></div>
+        ) : holdersData.length === 0 ? (
+          <div className="text-center py-12 text-slate-400 text-sm">No items currently held by employees</div>
+        ) : (
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={holdersSearch}
+                onChange={(e) => setHoldersSearch(e.target.value)}
+                placeholder="Search by name or employee ID…"
+                className="input pl-8 py-1.5 text-sm w-full"
+              />
+              {holdersSearch && (
+                <button onClick={() => setHoldersSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {holdersData.filter((h) => {
+              const q = holdersSearch.toLowerCase();
+              return !q || h.employee_name?.toLowerCase().includes(q) || h.employee_code?.toLowerCase().includes(q);
+            }).length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-sm">No matches for "{holdersSearch}"</div>
+            ) : null}
+            <div className="space-y-2">
+            {holdersData.filter((h) => {
+              const q = holdersSearch.toLowerCase();
+              return !q || h.employee_name?.toLowerCase().includes(q) || h.employee_code?.toLowerCase().includes(q);
+            }).map((h) => (
+              <div key={h.employee_id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
+                <div>
+                  <div className="font-medium text-slate-900">{h.employee_name}</div>
+                  {h.employee_code && <div className="text-slate-500 text-xs">{h.employee_code}</div>}
+                  <div className="text-xs text-slate-400 mt-0.5">{h.total_assigned} assigned · {h.total_returned} returned</div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="font-semibold text-slate-900">{h.net_quantity} <span className="text-slate-400 font-normal">{holdersItem?.unit}</span></div>
+                  {canEdit && holdersItem && (
+                    <button
+                      onClick={(e) => { setHoldersOpen(false); openAction(holdersItem, 'return', e); }}
+                      className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                      title={`Return from ${h.employee_name}`}
+                    >
+                      <RotateCcw className="w-3 h-3" /> Return
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            </div>
+          </div>
         )}
       </Drawer>
     </>
