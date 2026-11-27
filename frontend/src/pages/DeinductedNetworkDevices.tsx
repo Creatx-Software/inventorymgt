@@ -32,11 +32,11 @@ const decomApi = {
   list: (p: any) => networkDevicesApi.list({ ...p, decommissioned: true }),
 };
 
-export default function DecommissionedNetworkDevicesPage() {
+export default function DeinductedNetworkDevicesPage() {
   const [restoring, setRestoring] = useState(false);
   return (
     <AssetPage<NetworkDevice, Extra>
-      title="Decommissioned Network Devices"
+      title="Deinducted Network Devices"
       subtitle="Network devices removed from active service"
       resource="network-devices"
       assetType="network_device"
@@ -50,7 +50,7 @@ export default function DecommissionedNetworkDevicesPage() {
           onClick={async () => {
             if (!confirm(`Restore "${row.serial_number}" back to active Network Devices?`)) return;
             setRestoring(true);
-            try { await networkDevicesApi.restoreDecommission(row.id); reload(); close(); }
+            try { await networkDevicesApi.restoreDeinduct(row.id); reload(); close(); }
             finally { setRestoring(false); }
           }}
           className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"

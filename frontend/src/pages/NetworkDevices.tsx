@@ -30,7 +30,7 @@ const columns: ColumnDef<NetworkDevice, any>[] = [
 ];
 
 export default function NetworkDevicesPage() {
-  const [decommissioning, setDecommissioning] = useState(false);
+  const [deducting, setDeducting] = useState(false);
   return (
     <AssetPage<NetworkDevice, Extra>
       title="Network Devices"
@@ -57,16 +57,16 @@ export default function NetworkDevicesPage() {
       })}
       extraDrawerFooter={(row, reload, close) => (
         <button
-          disabled={decommissioning}
+          disabled={deducting}
           onClick={async () => {
-            if (!confirm(`Decommission "${row.serial_number}"? It will be hidden from the main Network Devices list.`)) return;
-            setDecommissioning(true);
-            try { await networkDevicesApi.decommission(row.id); reload(); close(); }
-            finally { setDecommissioning(false); }
+            if (!confirm(`Deinduct "${row.serial_number}"? It will be hidden from the main Network Devices list.`)) return;
+            setDeducting(true);
+            try { await networkDevicesApi.deinduct(row.id); reload(); close(); }
+            finally { setDeducting(false); }
           }}
           className="btn bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
         >
-          <PowerOff className="w-4 h-4" /> Decommission
+          <PowerOff className="w-4 h-4" /> Deinduct
         </button>
       )}
       renderExtraFields={(extra, set, _common) => (

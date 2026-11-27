@@ -23,8 +23,8 @@ export interface ListParams {
   sortDir?: 'asc' | 'desc';
   filters?: Record<string, string>;
   includeDeleted?: boolean;
-  /** When true: show only decommissioned rows. When false/undefined: exclude decommissioned rows. */
-  decommissioned?: boolean;
+  /** When true: show only deinducted rows. When false/undefined: exclude deinducted rows. */
+  deinducted?: boolean;
 }
 
 const COMMON_FIELDS = [
@@ -68,10 +68,10 @@ export class AssetService {
           `${T}.id`,
         );
       if (!params.includeDeleted) q.whereNull(`${T}.deleted_at`);
-      // Decommissioned filter — only for tables that have is_decommissioned
+      // Deinducted filter — only for tables that have is_decommissioned
       const hasDecommCol = ['servers', 'network_devices'].includes(T);
       if (hasDecommCol) {
-        if (params.decommissioned === true) {
+        if (params.deinducted === true) {
           q.where(`${T}.is_decommissioned`, true);
         } else {
           q.where(`${T}.is_decommissioned`, false);
@@ -280,7 +280,7 @@ export class AssetService {
     return true;
   }
 
-  async setDecommissioned(id: number, value: boolean) {
+  async setDeinducted(id: number, value: boolean) {
     await db(this.opts.table).where({ id }).update({ is_decommissioned: value, updated_at: db.fn.now() });
     return true;
   }

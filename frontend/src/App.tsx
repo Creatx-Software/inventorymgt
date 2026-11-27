@@ -26,8 +26,8 @@ import ConsumableStock from './pages/ConsumableStock';
 import NotesPage from './pages/NotesPage';
 import ActivitiesPage from './pages/ActivitiesPage';
 import Firewalls from './pages/Firewalls';
-import DecommissionedServers from './pages/DecommissionedServers';
-import DecommissionedNetworkDevices from './pages/DecommissionedNetworkDevices';
+import DeinductedServers from './pages/DeinductedServers';
+import DeinductedNetworkDevices from './pages/DeinductedNetworkDevices';
 
 export default function App() {
   return (
@@ -60,8 +60,8 @@ export default function App() {
             <Route path="/notes"             element={<NotesPage />} />
             <Route path="/activities"        element={<ActivitiesPage />} />
             <Route path="/firewalls"         element={<Firewalls />} />
-            <Route path="/decommissioned/servers"         element={<DecommissionedServers />} />
-            <Route path="/decommissioned/network-devices" element={<DecommissionedNetworkDevices />} />
+            <Route path="/deinducted/servers"         element={<DeinductedServers />} />
+            <Route path="/deinducted/network-devices" element={<DeinductedNetworkDevices />} />
           </Route>
         </Routes>
       </BrowserRouter>
