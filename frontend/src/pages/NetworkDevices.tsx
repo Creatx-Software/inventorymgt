@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { AssetPage } from '../components/asset/AssetPage';
 import { commonAssetColumns } from '../components/asset/columns';
 import { fmtDate } from '../components/asset/CommonFields';
 import { networkDevicesApi } from '../api/assets';
 import type { NetworkDevice } from '../types/assets';
 import type { ColumnDef } from '@tanstack/react-table';
+import { PowerOff } from 'lucide-react';
 
 interface Extra {
   device_name: string; host_name: string; ip_address: string; asset_code: string;
@@ -28,6 +30,7 @@ const columns: ColumnDef<NetworkDevice, any>[] = [
 ];
 
 export default function NetworkDevicesPage() {
+  const [decommissioning, setDecommissioning] = useState(false);
   return (
     <AssetPage<NetworkDevice, Extra>
       title="Network Devices"
@@ -52,6 +55,20 @@ export default function NetworkDevicesPage() {
         warranty_expiry_date: r.warranty_expiry_date ? r.warranty_expiry_date.slice(0, 10) : '',
         eol_date: r.eol_date ? r.eol_date.slice(0, 10) : '',
       })}
+      extraDrawerFooter={(row, reload, close) => (
+        <button
+          disabled={decommissioning}
+          onClick={async () => {
+            if (!confirm(`Decommission "${row.serial_number}"? It will be hidden from the main Network Devices list.`)) return;
+            setDecommissioning(true);
+            try { await networkDevicesApi.decommission(row.id); reload(); close(); }
+            finally { setDecommissioning(false); }
+          }}
+          className="btn bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+        >
+          <PowerOff className="w-4 h-4" /> Decommission
+        </button>
+      )}
       renderExtraFields={(extra, set, _common) => (
         <div className="grid grid-cols-2 gap-4">
           <div><label className="label">Device Name</label><input className="input" value={extra.device_name} onChange={(e) => set({ ...extra, device_name: e.target.value })} /></div>

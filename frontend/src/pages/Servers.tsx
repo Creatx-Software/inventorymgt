@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AssetPage } from '../components/asset/AssetPage';
 import { commonAssetColumns } from '../components/asset/columns';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
@@ -5,6 +6,7 @@ import { fmtDate } from '../components/asset/CommonFields';
 import { serversApi } from '../api/assets';
 import type { Server } from '../types/assets';
 import type { ColumnDef } from '@tanstack/react-table';
+import { PowerOff } from 'lucide-react';
 
 interface Extra {
   application_name: string; can_id: string;
@@ -63,6 +65,7 @@ const columns: ColumnDef<Server, any>[] = [
 ];
 
 export default function ServersPage() {
+  const [decommissioning, setDecommissioning] = useState(false);
   return (
     <AssetPage<Server, Extra>
       title="Servers"
@@ -117,6 +120,20 @@ export default function ServersPage() {
         exception_memo_no: r.exception_memo_no || '',
         rack_number: r.rack_number || '',
       })}
+      extraDrawerFooter={(row, reload, close) => (
+        <button
+          disabled={decommissioning}
+          onClick={async () => {
+            if (!confirm(`Decommission "${row.serial_number}"? It will be hidden from the main Servers list.`)) return;
+            setDecommissioning(true);
+            try { await serversApi.decommission(row.id); reload(); close(); }
+            finally { setDecommissioning(false); }
+          }}
+          className="btn bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+        >
+          <PowerOff className="w-4 h-4" /> Decommission
+        </button>
+      )}
       renderExtraFields={(extra, set, _common) => (
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2"><label className="label">Application Name</label><input className="input" value={extra.application_name} onChange={(e) => set({ ...extra, application_name: e.target.value })} /></div>
