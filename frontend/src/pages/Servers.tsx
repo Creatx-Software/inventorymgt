@@ -120,6 +120,12 @@ export default function ServersPage() {
         exception_memo_no: r.exception_memo_no || '',
         rack_number: r.rack_number || '',
       })}
+      extraFilterFields={[
+        { key: 'environment',       label: 'Environment',   type: 'select', options: ['Prod','FB','DR'].map((x) => ({ value: x, label: x })) },
+        { key: 'server_class',      label: 'Class',         type: 'select', options: [{ value: 'Physical', label: 'Physical' }, { value: 'Virtual', label: 'Virtual' }] },
+        { key: 'server_type',       label: 'Server Type',   type: 'select', options: ['Web','App','DB','Other'].map((x) => ({ value: x, label: x })) },
+        { key: 'application_tier',  label: 'Tier',          type: 'select', options: ['0','1','2','3','4'].map((x) => ({ value: x, label: x })) },
+      ]}
       extraDrawerFooter={(row, reload, close) => (
         <button
           disabled={decommissioning}
