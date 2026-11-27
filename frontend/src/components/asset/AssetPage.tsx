@@ -43,13 +43,15 @@ export interface AssetPageProps<T extends AssetCommon, ExtraForm extends Record<
   defaultSorting?: { id: string; desc: boolean }[];
   /** Extra column filter fields specific to this asset type (common filters are added automatically) */
   extraFilterFields?: FilterFieldDef[];
+  /** Extra buttons rendered in the drawer footer left side, next to Delete */
+  extraDrawerFooter?: (row: T, reload: () => void, closeDrawer: () => void) => ReactNode;
 }
 
 export type { FilterFieldDef };
 
 export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string, any>>({
   title, subtitle, resource, assetType, api, columns, stickyColumnIds,
-  emptyExtra, extraToPayload, rowToExtra, renderExtraFields, defaultSorting, extraFilterFields,
+  emptyExtra, extraToPayload, rowToExtra, renderExtraFields, defaultSorting, extraFilterFields, extraDrawerFooter,
 }: AssetPageProps<T, ExtraForm>) {
   const { hasPermission } = useAuth();
   const perm = `${assetType}s`; // e.g. 'endpoint' → 'endpoints'
@@ -297,9 +299,12 @@ export function AssetPage<T extends AssetCommon, ExtraForm extends Record<string
         width="lg"
         footer={
           <div className="flex justify-between">
-            <div>{editing && canDelete && (
-              <button onClick={remove} className="btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Delete</button>
-            )}</div>
+            <div className="flex gap-2">
+              {editing && canDelete && (
+                <button onClick={remove} className="btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Delete</button>
+              )}
+              {editing && extraDrawerFooter?.(editing, () => setReloadKey((k) => k + 1), () => setOpen(false))}
+            </div>
             <div className="flex gap-2">
               <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
               {(editing ? canEdit : canCreate) && (

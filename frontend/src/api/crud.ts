@@ -12,6 +12,7 @@ export function createCrudApi<T extends { id: number }>(resource: string) {
       if (params.sortBy) query.sortBy = params.sortBy;
       if (params.sortDir) query.sortDir = params.sortDir;
       if (params.includeDeleted) query.includeDeleted = 'true';
+      if (params.decommissioned !== undefined) query.decommissioned = params.decommissioned ? 'true' : 'false';
       if (params.filters) Object.assign(query, params.filters);
       const r = await api.get(`/${resource}`, { params: query });
       return r.data;

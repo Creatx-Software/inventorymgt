@@ -16,6 +16,7 @@ export interface ListParams {
   sortDir?: 'asc' | 'desc';
   filters?: Record<string, string>;
   includeDeleted?: boolean;
+  decommissioned?: boolean;
 }
 
 export interface Vendor {

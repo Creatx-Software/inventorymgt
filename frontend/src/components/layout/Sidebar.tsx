@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Laptop, Monitor, Smartphone, Phone, Server,
   Printer, Network, Package, AlertTriangle, Users, Building2,
   MapPin, Tag, ScrollText, Settings, Boxes, ChevronsLeft, ChevronsRight,
-  UserCog, ShieldCheck, CheckSquare, ShieldAlert, PackageOpen, StickyNote, Activity, Flame,
+  UserCog, ShieldCheck, CheckSquare, ShieldAlert, PackageOpen, StickyNote, Activity, Flame, PowerOff,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -59,6 +59,13 @@ const sections: NavSection[] = [
       { to: '/departments', label: 'Departments', icon: Building2, permission: 'departments_view' },
       { to: '/locations',   label: 'Locations',   icon: MapPin,    permission: 'locations_view' },
       { to: '/vendors',     label: 'Vendors',     icon: Tag,       permission: 'vendors_view' },
+    ],
+  },
+  {
+    title: 'Decommissioned',
+    items: [
+      { to: '/decommissioned/servers',         label: 'Servers',         icon: PowerOff, permission: 'servers_view' },
+      { to: '/decommissioned/network-devices', label: 'Network Devices', icon: PowerOff, permission: 'network_devices_view' },
     ],
   },
   {
