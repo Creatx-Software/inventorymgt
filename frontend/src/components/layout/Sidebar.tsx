@@ -62,10 +62,10 @@ const sections: NavSection[] = [
     ],
   },
   {
-    title: 'Decommissioned',
+    title: 'Deinducted',
     items: [
-      { to: '/decommissioned/servers',         label: 'Servers',         icon: PowerOff, permission: 'servers_view' },
-      { to: '/decommissioned/network-devices', label: 'Network Devices', icon: PowerOff, permission: 'network_devices_view' },
+      { to: '/deinducted/servers',         label: 'Servers',         icon: PowerOff, permission: 'servers_view' },
+      { to: '/deinducted/network-devices', label: 'Network Devices', icon: PowerOff, permission: 'network_devices_view' },
     ],
   },
   {

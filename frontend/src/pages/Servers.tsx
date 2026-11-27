@@ -66,7 +66,7 @@ const columns: ColumnDef<Server, any>[] = [
 ];
 
 export default function ServersPage() {
-  const [decommissioning, setDecommissioning] = useState(false);
+  const [deducting, setDeducting] = useState(false);
   return (
     <AssetPage<Server, Extra>
       title="Servers"
@@ -129,16 +129,16 @@ export default function ServersPage() {
       ]}
       extraDrawerFooter={(row, reload, close) => (
         <button
-          disabled={decommissioning}
+          disabled={deducting}
           onClick={async () => {
-            if (!confirm(`Decommission "${row.serial_number}"? It will be hidden from the main Servers list.`)) return;
-            setDecommissioning(true);
-            try { await serversApi.decommission(row.id); reload(); close(); }
-            finally { setDecommissioning(false); }
+            if (!confirm(`Deinduct "${row.serial_number}"? It will be hidden from the main Servers list.`)) return;
+            setDeducting(true);
+            try { await serversApi.deinduct(row.id); reload(); close(); }
+            finally { setDeducting(false); }
           }}
           className="btn bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
         >
-          <PowerOff className="w-4 h-4" /> Decommission
+          <PowerOff className="w-4 h-4" /> Deinduct
         </button>
       )}
       renderExtraFields={(extra, set, _common) => (

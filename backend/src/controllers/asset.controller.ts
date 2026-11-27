@@ -12,7 +12,7 @@ export function buildAssetRouter(opts: AssetCrudOptions) {
   const perm = `${opts.assetType}s`;
 
   router.get('/', async (req: AuthRequest, res: Response) => {
-    const { page, pageSize, search, sortBy, sortDir, includeDeleted, decommissioned, ...rest } = req.query as any;
+    const { page, pageSize, search, sortBy, sortDir, includeDeleted, deinducted, ...rest } = req.query as any;
     const filters: Record<string, string> = {};
     for (const [k, v] of Object.entries(rest)) {
       if (typeof v === 'string') filters[k] = v;
@@ -25,7 +25,7 @@ export function buildAssetRouter(opts: AssetCrudOptions) {
       sortDir: (sortDir as 'asc' | 'desc') || undefined,
       filters,
       includeDeleted: includeDeleted === 'true',
-      decommissioned: decommissioned === 'true' ? true : decommissioned === 'false' ? false : undefined,
+      deinducted: deinducted === 'true' ? true : deinducted === 'false' ? false : undefined,
     });
     res.json(result);
   });
@@ -79,10 +79,10 @@ export function buildAssetRouter(opts: AssetCrudOptions) {
     res.json({ success: true });
   });
 
-  router.post('/:id/decommission', requirePermission(`${perm}_edit`), async (req: AuthRequest, res) => {
+  router.post('/:id/deinduct', requirePermission(`${perm}_edit`), async (req: AuthRequest, res) => {
     try {
       const id = Number(req.params.id);
-      await svc.setDecommissioned(id, true);
+      await svc.setDeinducted(id, true);
       await audit({ userId: req.user!.id, action: 'UPDATE', entityType: opts.assetType, entityId: id, changes: { is_decommissioned: true }, ipAddress: req.ip });
       res.json({ success: true });
     } catch (e: any) {
@@ -90,10 +90,10 @@ export function buildAssetRouter(opts: AssetCrudOptions) {
     }
   });
 
-  router.post('/:id/restore-decommission', requirePermission(`${perm}_edit`), async (req: AuthRequest, res) => {
+  router.post('/:id/restore-deinduct', requirePermission(`${perm}_edit`), async (req: AuthRequest, res) => {
     try {
       const id = Number(req.params.id);
-      await svc.setDecommissioned(id, false);
+      await svc.setDeinducted(id, false);
       await audit({ userId: req.user!.id, action: 'UPDATE', entityType: opts.assetType, entityId: id, changes: { is_decommissioned: false }, ipAddress: req.ip });
       res.json({ success: true });
     } catch (e: any) {

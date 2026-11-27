@@ -58,11 +58,11 @@ const decomApi = {
   list: (p: any) => serversApi.list({ ...p, decommissioned: true }),
 };
 
-export default function DecommissionedServersPage() {
+export default function DeinductedServersPage() {
   const [restoring, setRestoring] = useState(false);
   return (
     <AssetPage<Server, Extra>
-      title="Decommissioned Servers"
+      title="Deinducted Servers"
       subtitle="Servers removed from active service"
       resource="servers"
       assetType="server"
@@ -76,7 +76,7 @@ export default function DecommissionedServersPage() {
           onClick={async () => {
             if (!confirm(`Restore "${row.serial_number}" back to active Servers?`)) return;
             setRestoring(true);
-            try { await serversApi.restoreDecommission(row.id); reload(); close(); }
+            try { await serversApi.restoreDeinduct(row.id); reload(); close(); }
             finally { setRestoring(false); }
           }}
           className="btn bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
